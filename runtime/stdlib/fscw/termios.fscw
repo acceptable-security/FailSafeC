@@ -1,0 +1,214 @@
+/* -*- C -*- */
+
+%% C-PROLOGUE
+#define _XOPEN_SOURCE 500
+#include <termios.h>
+#include <string.h>
+
+%% FSC-PROLOGUE
+#include <termios.h>
+
+%% REQUIRED-DECLS
+struct stdlib_termios;
+typedef cc_t;
+typedef speed_t;
+typedef tcflag_t;
+require_function tcsetattr;
+require_function tcgetattr;
+require_function cfsetispeed;
+require_function cfsetospeed;
+require_function cfgetispeed;
+require_function cfgetospeed;
+auto_generate tcsendbreak;
+auto_generate tcdrain;
+auto_generate tcflow;
+auto_generate tcflush;
+auto_generate tcgetsid;
+%% NATIVE-IMPLEMENTATION
+
+/* 
+   Part of Fail-Safe C Runtime. Produced by Yutaka Oiwa.
+   (c) 2001-2005 Yutaka Oiwa.
+   (c) 2005-2006 AIST.
+   (c) 2006	 Lepidum Co. Ltd.
+
+   This file is written by Lepidum Co. Ltd. in 2006.
+
+   This file is distributed under Apache License 2.0 with a special exception.
+   See the file LICENSE contained in the distribution.
+*/
+
+static void wrap_termios(fscw_struct_stdlib_termios *dst, struct termios *src)
+{
+  fscw_cc_t (*p)[NCCS];
+  int i;
+
+  memset(dst, 0, sizeof *dst);
+  fscw_tcflag_t_wrap_write(fscw_tcflag_t_member(dst, c_iflag), src->c_iflag);
+  fscw_tcflag_t_wrap_write(fscw_tcflag_t_member(dst, c_oflag), src->c_oflag);
+  fscw_tcflag_t_wrap_write(fscw_tcflag_t_member(dst, c_cflag), src->c_cflag);
+  fscw_tcflag_t_wrap_write(fscw_tcflag_t_member(dst, c_lflag), src->c_lflag);
+  fscw_cc_t_wrap_write(fscw_cc_t_member(dst, __c_line), src->c_line);
+  p = fscw_cc_t_member(dst, c_cc);
+  for (i = 0; i < NCCS; i++) {
+    fscw_cc_t_wrap_write(&(*p)[i], src->c_cc[i]);
+  }
+#ifdef _HAVE_STRUCT_TERMIOS_C_ISPEED
+  fscw_speed_t_wrap_write(fscw_speed_t_member(dst, __c_ispeed), src->c_ispeed);
+#endif
+#ifdef _HAVE_STRUCT_TERMIOS_C_OSPEED
+  fscw_speed_t_wrap_write(fscw_speed_t_member(dst, __c_ospeed), src->c_ospeed);
+#endif
+}
+
+static void unwrap_termios(struct termios *dst, fscw_struct_stdlib_termios *src)
+{
+  fscw_cc_t (*p)[NCCS];
+  int i;
+
+  memset(dst, 0, sizeof *dst);
+  dst->c_iflag = fscw_tcflag_t_read_unwrap(fscw_tcflag_t_member(src, c_iflag));
+  dst->c_oflag = fscw_tcflag_t_read_unwrap(fscw_tcflag_t_member(src, c_oflag));
+  dst->c_cflag = fscw_tcflag_t_read_unwrap(fscw_tcflag_t_member(src, c_cflag));
+  dst->c_lflag = fscw_tcflag_t_read_unwrap(fscw_tcflag_t_member(src, c_lflag));
+  dst->c_line  = fscw_cc_t_read_unwrap(fscw_cc_t_member(src, __c_line));
+  p = fscw_cc_t_member(src, c_cc);
+  for (i = 0; i < NCCS; i++) {
+    dst->c_cc[i] = fscw_cc_t_read_unwrap(&(*p)[i]);
+  }
+#ifdef _HAVE_STRUCT_TERMIOS_C_ISPEED
+  dst->c_ispeed = fscw_speed_t_read_unwrap(fscw_speed_t_member(src, __c_ispeed));
+#endif
+#ifdef _HAVE_STRUCT_TERMIOS_C_OSPEED
+  dst->c_ospeed = fscw_speed_t_read_unwrap(fscw_speed_t_member(src, __c_ospeed));
+#endif
+}
+
+/**
+ * @fn int tcgetattr(int fd, struct termios *buf)
+ * @brief get terminal attribute.
+ * @param fd file descriptor.
+ * @param buf buffer to store result
+ * @retval 0 successed.
+ * @retval -1 failed.
+ *
+ * @crashcase illegal pointer
+ * @fsctype struct(atomic)
+ *
+ * @author Lepidum Co., Ltd.
+ */
+fscw_int fscw_tcgetattr(fscw_int_param(fd), fscw_pointer_param(buf))
+{
+  struct termios t;
+  int ret;
+  
+  ret = tcgetattr(fd, &t);
+
+  if (ret == 0) {
+    fscw_struct_stdlib_termios ft;
+    wrap_termios(&ft, &t);
+    fscw_struct_stdlib_termios_write_pointer_param(buf, 0, ft);
+  }
+  return value_of_int(ret);
+}
+
+/**
+ * @fn int tcsetattr(int fd, int option, const struct termios *buf)
+ * @brief set terminal attribute.
+ * @param fd file descriptor.
+ * @param option one of TCSANOW, TCSADRAIN, TCSAFLUSH
+ * @param buf attribute to set
+ * @retval 0 success. at least one attribute is set.
+ * @retval -1 failed.
+ *
+ * @crashcase illegal pointer
+ * @fsctype struct(atomic)
+ *
+ * @author Lepidum Co., Ltd.
+ */
+fscw_int fscw_tcsetattr(fscw_int_param(fd), fscw_int_param(option), fscw_pointer_param(buf))
+{
+  struct termios t;
+  int ret;
+  fscw_struct_stdlib_termios ft;
+  ft = fscw_struct_stdlib_termios_read_pointer_param(buf, 0);
+  unwrap_termios(&t, &ft);
+  ret = tcsetattr(fd, option, &t);
+
+  return value_of_int(ret);
+}
+
+/**
+ * @fn int cfsetispeed(struct termios *p, speed_t sp)
+ * @brief set input speed
+ *
+ * @author Lepidum Co., Ltd.
+ */
+fscw_int fscw_cfsetispeed(fscw_pointer_param(p), fscw_speed_t_param(sp))
+{
+  struct termios t;
+  int ret;
+  fscw_struct_stdlib_termios ft;
+  ft = fscw_struct_stdlib_termios_read_pointer_param(p, 0);
+  unwrap_termios(&t, &ft);
+  ret = cfsetispeed(&t, sp);
+  if (ret == 0) {
+    wrap_termios(&ft, &t);
+    fscw_struct_stdlib_termios_write_pointer_param(p, 0, ft);
+  }
+  return fscw_int_wrap(ret);
+}
+
+                          
+/**
+ * @fn int cfsetospeed(struct termios *p, speed_t sp)
+ * @brief set output speed
+ *
+ * @author Lepidum Co., Ltd.
+ */
+fscw_int fscw_cfsetospeed(fscw_pointer_param(p), fscw_speed_t_param(sp))
+{
+  struct termios t;
+  int ret;
+  fscw_struct_stdlib_termios ft;
+  ft = fscw_struct_stdlib_termios_read_pointer_param(p, 0);
+  unwrap_termios(&t, &ft);
+  ret = cfsetospeed(&t, sp);
+  if (ret == 0) {
+    wrap_termios(&ft, &t);
+    fscw_struct_stdlib_termios_write_pointer_param(p, 0, ft);
+  }
+  return fscw_int_wrap(ret);
+}
+
+/**
+ * @fn int cfgetispeed(const struct termios *p)
+ * @brief get input speed
+ *
+ * @author Lepidum Co., Ltd.
+ */
+fscw_speed_t fscw_cfgetispeed(fscw_pointer_param(p))
+{
+  struct termios t;
+  fscw_struct_stdlib_termios ft;
+  ft = fscw_struct_stdlib_termios_read_pointer_param(p, 0);
+  unwrap_termios(&t, &ft);
+  return fscw_speed_t_wrap(cfgetispeed(&t));
+}
+
+/**
+ * @fn int cfgetospeed(const struct termios *p)
+ * @brief get output speed
+ *
+ * @author Lepidum Co., Ltd.
+ */
+fscw_speed_t fscw_cfgetospeed(fscw_pointer_param(p))
+{
+  struct termios t;
+  fscw_struct_stdlib_termios ft;
+  ft = fscw_struct_stdlib_termios_read_pointer_param(p, 0);
+  unwrap_termios(&t, &ft);
+  return fscw_speed_t_wrap(cfgetospeed(&t));
+}
+
+

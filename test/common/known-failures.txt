@@ -1,0 +1,21 @@
+fscc/C99/6.4.2.2-predefined-identifiers.test.c:	C99 __func__
+fscc/C99/6.5.3-unary-expr-10.fail.compile.test.c:	TODO add ticket
+fscc/C99/6.5.3-unary-expr-3.fail.compile.test.c:	TODO add ticket
+fscc/knownbugs/84.1.test.c:	gcc extension zero size array
+fscc/knownbugs/fsccbug-L95-1.link.test.c:	bug #l-95
+fscc/knownbugs/fsccbug-L95.compile.test.c:	bug #l-95
+fscc/knownbugs/fsccbug-L111.link.test.c:	bug #l-111
+fscc/knownbugs/fsccbug-L112.compile.test.c:	bug #l-112
+fscc/knownbugs/fsccbug-L117-1.link.test.c:	bug #l-117
+C99_6_4_2_2_predefined_identifiers:	C99 __func__
+C99_6_4_4_1_integer_constants_2:	incompatibility of C89 and C99 decimal constant
+fsccbug_84_1:	gcc extension
+fsccbug_84_2:	gcc extension
+fsccbug_L49:	bug #l-49
+jn_1:	precision of floating point
+printf_width_7:	$ is not supported
+sscanf_p:	%p is not supported
+malloc_5:	erroneous malloc trap
+realloc_7:	erroneous malloc trap
+realloc_8:	erroneous malloc trap
+gethostname_2_nonlinux:	linux gethostname bug (truncated hostname must be returned)

@@ -1,0 +1,12 @@
+/* -*- C -*- */
+
+%% C-PROLOGUE
+#include <sys/file.h>
+
+%% FSC-PROLOGUE
+#include <sys/file.h>
+
+%% REQUIRED-DECLS
+auto_generate flock;
+
+%% NATIVE-IMPLEMENTATION

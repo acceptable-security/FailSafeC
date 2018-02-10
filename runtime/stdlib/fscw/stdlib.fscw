@@ -1,0 +1,408 @@
+/* -*- C -*- */
+
+%% C-PROLOGUE
+#define _XOPEN_SOURCE 600
+#include <stdlib.h>
+#include <string.h>
+#include <locale.h>
+#include <sys/param.h>
+
+extern char *mkdtemp(char *); /* require BSD_SOURCE */
+
+#include <stdlib/env_helper.h>
+
+%% FSC-PROLOGUE
+#include <stdlib.h>
+
+%% REQUIRED-DECLS
+auto_generate _Exit;
+auto_generate abort;
+auto_generate drand48;
+auto_generate exit;
+auto_generate grantpt;
+auto_generate labs;
+auto_generate llabs;
+auto_generate lrand48;
+auto_generate mrand48;
+auto_generate posix_openpt;
+auto_generate ptsname;
+auto_generate rand;
+auto_generate random;
+auto_generate srand;
+auto_generate srand48;
+auto_generate srandom;
+auto_generate system;
+auto_generate unlockpt;
+
+auto_generate atoi;
+auto_generate atol;
+auto_generate atoll;
+auto_generate a64l;
+
+require_function erand48;
+require_function jrand48;
+require_function lcong48;
+require_function nrand48;
+require_function seed48;
+
+require_function div;
+require_function fcvt;
+require_function mkstemp;
+require_function mkdtemp;
+require_function realpath;
+//require_function setstate;
+
+//require_function strtol;
+//require_function strtoul;
+//require_function strtoll;
+require_function strtoull;
+require_function strtof;
+require_function strtod;
+//require_function strtold;
+
+require_function ldiv;
+require_function lldiv;
+//require_function mktemp;
+//    moved to separate mktemp.c
+//    to avoid gcc "insecure function" warning
+require_function ecvt;
+require_function gcvt;
+require_function l64a;
+
+%% NATIVE-IMPLEMENTATION
+
+#include <copydata.h>
+#include <wrapper/fscw_helper.h>
+
+/**
+ * @fn double erand48(unsigned short x[3])
+ * @brief generate random number
+ *
+ * @author Lepidum Co., Ltd.
+ */
+fscw_double fscw_erand48(fscw_pointer_param(px))
+{
+  unsigned short x[3];
+  int i;
+  double v;
+  for (i = 0; i < 3; i++) x[i] = fscw_short_unwrap(fscw_short_read_pointer_param(px, i));
+  v = erand48(x);
+  for (i = 0; i < 3; i++) fscw_short_write_pointer_param(px, i, fscw_short_wrap(x[i]));
+  return fscw_double_wrap(v);
+}
+
+
+/**
+ * @fn long jrand48(unsigned short x[3])
+ * @brief generate random number
+ *
+ * @author Lepidum Co., Ltd.
+ */
+fscw_long fscw_jrand48(fscw_pointer_param(px))
+{
+  unsigned short x[3];
+  int i;
+  long v;
+  for (i = 0; i < 3; i++) x[i] = fscw_unsigned_short_unwrap(fscw_unsigned_short_read_pointer_param(px, i));
+  v = jrand48(x);
+  for (i = 0; i < 3; i++) fscw_unsigned_short_write_pointer_param(px, i, fscw_unsigned_short_wrap(x[i]));
+  return fscw_long_wrap(v);
+}
+
+/**
+ * @fn long nrand48(unsigned short x[3])
+ * @brief generate random number
+ *
+ * @author Lepidum Co., Ltd.
+ */
+fscw_long fscw_nrand48(fscw_pointer_param(px))
+{
+  unsigned short x[3];
+  int i;
+  long v;
+  for (i = 0; i < 3; i++) x[i] = fscw_unsigned_short_unwrap(fscw_unsigned_short_read_pointer_param(px, i));
+  v = nrand48(x);
+  for (i = 0; i < 3; i++) fscw_unsigned_short_write_pointer_param(px, i, fscw_unsigned_short_wrap(x[i]));
+  return fscw_long_wrap(v);
+}
+
+/**
+ * @fn void lcong48(unsigned short x[7])
+ * @brief initialize randome number generator
+ *
+ * @author Lepidum Co., Ltd.
+ */
+void fscw_lcong48(fscw_pointer_param(px))
+{
+  unsigned short x[7];
+  int i;
+  for (i = 0; i < 7; i++) x[i] = fscw_unsigned_short_unwrap(fscw_unsigned_short_read_pointer_param(px, i));
+  lcong48(x);
+}
+
+/**
+ * @fn unsigned short *seed48(unsigned short x[3])
+ * @brief initialize random number generator
+ *
+ * @author Lepidum Co., Ltd.
+ */
+fscw_pointer fscw_seed48(fscw_pointer_param(px))
+{
+  fscw_unsigned_short *r = fscw_unsigned_short_alloc(3);
+  unsigned short x[3];
+  int i;
+  unsigned short *v;
+  for (i = 0; i < 3; i++) x[i] = fscw_unsigned_short_unwrap(fscw_unsigned_short_read_pointer_param(px, i));
+  v = seed48(x);
+  for (i = 0; i < 3; i++) r[i] = fscw_unsigned_short_wrap(v[i]);
+  return fscw_pointer_wrap(r);
+}
+
+/**
+ * @fn char *fcvt(double v, int ndigit, int *decpt, int *sign)
+ * @brief convert double to string
+ *
+ * @author Lepidum Co., Ltd.
+ */
+fscw_pointer fscw_fcvt(fscw_double_param(v),
+                       fscw_int_param(ndigit),
+                       fscw_pointer_param(decpt),
+                       fscw_pointer_param(sign))
+{
+  int d, s;
+  char *r = fcvt(v, ndigit, &d, &s);
+  fscw_int_write_pointer_param(decpt, 0, d);
+  fscw_int_write_pointer_param(sign,  0, s);
+  return fscw_string_wrap(r);
+}
+
+/**
+ * @fn div_t div(int num, int denom)
+ * @brief division
+ *
+ * @author Lepidum Co., Ltd.
+ */
+fscw_div_t fscw_div(fscw_int_param(num), fscw_int_param(denom))
+{
+  div_t v = div(num, denom);
+  fscw_div_t fv;
+  fscw_int_wrap_write(fscw_int_member(&fv, quot), v.quot);
+  fscw_int_wrap_write(fscw_int_member(&fv, rem), v.rem);
+  return fv;
+}
+
+/**
+ * @fn int mkstemp(char *tmpl)
+ * @brief create temporary file
+ *
+ * @author Lepidum Co., Ltd.
+ */
+fscw_int fscw_mkstemp(fscw_string_param(tmpl))
+{
+  void *t;
+  char *s = wrapper_get_string_z(tmpl_base, tmpl_ofs, &t, "mkstemp");
+  int fd = mkstemp(s);
+  if (fd != -1) {
+    wrapper_writeback_release_tmpbuf(tmpl_base, tmpl_ofs, t, strlen(s) + 1);
+  } else {
+    wrapper_release_tmpbuf(t);
+  }
+  return fscw_int_wrap(fd);
+}
+
+/**
+ * @fn char *mkdtemp(char *tmpl)
+ * @brief create temporary directory
+ *
+ * @author Lepidum Co., Ltd.
+ */
+fscw_pointer fscw_mkdtemp(fscw_string_param(tmpl))
+{
+  void *t;
+  char *s = wrapper_get_string_z(tmpl_base, tmpl_ofs, &t, "mkdtemp");
+  char *d = mkdtemp(s);
+  if (d != NULL) {
+    wrapper_writeback_release_tmpbuf(tmpl_base, tmpl_ofs, t, strlen(s) + 1);
+    return ptrvalue_of_base_ofs(tmpl_base, tmpl_ofs);
+  } else {
+    wrapper_release_tmpbuf(t);
+    return ptrvalue_of_base_ofs(0, 0);
+  }
+}
+
+/**
+ * @fn char *realpath(const char *filename, char *dst)
+ * @brief convert file name to full path
+ *
+ * @author Lepidum Co., Ltd.
+ */
+fscw_pointer fscw_realpath(fscw_string_param(filename),
+                           fscw_string_param(dst))
+{
+  fscw_string_buf fn = fscw_string_unwrap_param(filename, "realpath");
+  char buf[PATH_MAX+1];
+  char *r = realpath(fn.v, buf);
+  fscw_string_release(fn);
+  if (r) {
+    int len = strlen(r) + 1;
+    void *t;
+    char *s = wrapper_get_read_buffer(dst_base, dst_ofs, &t, len + 1, "realpath");
+    strcpy(s, r);
+    wrapper_writeback_release_tmpbuf(dst_base, dst_ofs, t, len + 1);
+    return ptrvalue_of_base_ofs(dst_base, dst_ofs);
+  } else {
+    return fscw_pointer_wrap(NULL);
+  }
+}
+
+#if 0
+fscw_pointer fscw_setstate(fscw_string_param(param_0))
+{
+}
+#endif
+
+/**
+ * @fn unsigned long long strtoull(const char *s, char **endp, int base)
+ * @brief convert string to integer
+ *
+ * @author Lepidum Co., Ltd.
+ */
+fscw_unsigned_long_long fscw_strtoull(fscw_string_param(s),
+                                      fscw_pointer_param(endp),
+                                      fscw_int_param(base))
+{
+  fscw_string_buf buf = fscw_string_unwrap_param(s, "strtoull");
+  char *p = NULL;
+  unsigned long long v = strtoull(buf.v, &p, base);
+  if (p && fscw_is_not_null(endp)) {
+    fscw_pointer q = ptrvalue_of_base_ofs(s_base,
+                                          s_ofs + (p - buf.v));
+    fscw_pointer_write_pointer_param(endp, 0, q);
+  }
+  fscw_string_release(buf);
+  return fscw_unsigned_long_long_wrap(v);
+}
+
+/**
+ * @fn float strtof(const char *s, char **endp)
+ * @brief convert string to float
+ *
+ * @author Lepidum Co., Ltd.
+ */
+fscw_float fscw_strtof(fscw_pointer_param(s), fscw_pointer_param(endp))
+{
+  fscw_string_buf buf = fscw_string_unwrap_param(s, "strtof");
+  char *p = NULL;
+  float v = strtof(buf.v, &p);
+  if (p && fscw_is_not_null(endp)) {
+    fscw_pointer q = ptrvalue_of_base_ofs(s_base,
+                                          s_ofs + (p - buf.v));
+    fscw_pointer_write_pointer_param(endp, 0, q);
+  }
+  fscw_string_release(buf);
+  return fscw_float_wrap(v);
+}
+
+/**
+ * @fn double strtod(const char *s, char **endp)
+ * @brief convert string to double
+ *
+ * @author Lepidum Co., Ltd.
+ */
+fscw_double fscw_strtod(fscw_pointer_param(s),
+                        fscw_pointer_param(endp))
+{
+  fscw_string_buf buf = fscw_string_unwrap_param(s, "strtod");
+  char *p = NULL;
+  double v = strtod(buf.v, &p);
+  if (p && fscw_is_not_null(endp)) {
+    fscw_pointer q = ptrvalue_of_base_ofs(s_base,
+                                          s_ofs + (p - buf.v));
+    fscw_pointer_write_pointer_param(endp, 0, q);
+  }
+  fscw_string_release(buf);
+  return fscw_double_wrap(v);
+}
+
+/**
+ * @fn ldiv_t ldiv(long num, long denom)
+ * @brief division
+ *
+ * @author Lepidum Co., Ltd.
+ */
+fscw_ldiv_t fscw_ldiv(fscw_long_param(num), fscw_long_param(denom))
+{
+  ldiv_t v = ldiv(num, denom);
+  fscw_ldiv_t fv;
+  fscw_long_wrap_write(fscw_long_member(&fv, quot), v.quot);
+  fscw_long_wrap_write(fscw_long_member(&fv, rem), v.rem);
+  return fv;
+}
+
+/**
+ * @fn lldiv_t lldiv(long long num, long long denom)
+ * @brief division
+ *
+ * @author Lepidum Co., Ltd.
+ */
+fscw_lldiv_t fscw_lldiv(fscw_long_long_param(num), fscw_long_long_param(denom))
+{
+  lldiv_t v = lldiv(num, denom);
+  fscw_lldiv_t fv;
+  fscw_long_long_wrap_write(fscw_long_long_member(&fv, quot), v.quot);
+  fscw_long_long_wrap_write(fscw_long_long_member(&fv, rem), v.rem);
+  return fv;
+}
+
+/**
+ * @fn char *ecvt(double v, int ndigit, int *decpt, int *sign)
+ * @brief convert double to string
+ *
+ * @author Lepidum Co., Ltd.
+ */
+fscw_pointer fscw_ecvt(fscw_double_param(v),
+                       fscw_int_param(ndigit),
+                       fscw_pointer_param(decpt),
+                       fscw_pointer_param(sign))
+{
+  int d, s;
+  char *r = ecvt(v, ndigit, &d, &s);
+  fscw_int_write_pointer_param(decpt, 0, d);
+  fscw_int_write_pointer_param(sign, 0, s);
+  return fscw_string_wrap(r);
+}
+
+/**
+ * @fn char *gcvt(double v, int ndigit, char *buf)
+ * @brief convert double to string
+ *
+ * @author Lepidum Co., Ltd.
+ */
+fscw_pointer fscw_gcvt(fscw_double_param(v),
+                       fscw_int_param(ndigit),
+                       fscw_string_param(buf))
+{
+  char *buffer;
+  struct lconv *lc;
+  int point_length, sign_length;
+  lc = localeconv();
+  point_length = strlen(lc->decimal_point);
+  sign_length = strlen(lc->negative_sign);
+  buffer = (char *)fsc_alloc_raw(ndigit + point_length + sign_length + 16);
+  gcvt(v, ndigit, buffer);
+  fsc_copy_from_raw(buf_base, buf_ofs, buffer, strlen(buffer) + 1);
+  fsc_release_raw(buffer);
+  return ptrvalue_of_base_ofs(buf_base, buf_ofs);
+}
+
+/**
+ * @fn char *l64a(long value)
+ * @brief convert 32-bit integer to radix-64 ASCII characters
+ *
+ * @author Lepidum Co., Ltd.
+ */
+fscw_pointer fscw_l64a(fscw_long_param(value))
+{
+  char *ret = l64a(value);
+  return fscw_string_wrap(ret);
+}

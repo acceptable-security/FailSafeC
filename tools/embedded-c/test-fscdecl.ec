@@ -1,0 +1,109 @@
+<%# #include "fsc-decl.ech" 
+/* -*- c -*- */ #%>
+
+<%
+WRAPPER_INIT
+%>
+
+<%
+WRAPPER_FUNCDECL_BEGIN(voidfunc,0)
+     WRAPPER_RET_VOID()
+WRAPPER_FUNCDECL_BODY
+%>
+{}
+<%
+WRAPPER_FUNCDECL_END
+%>
+
+<%
+WRAPPER_FUNCDECL_BEGIN(intfunc,1)
+     WRAPPER_ARG_VAL(x,int)
+     WRAPPER_RET_VAL(int)
+WRAPPER_FUNCDECL_BODY
+%>
+{  FSC_RETURN_VAL(x + 1); }
+<%
+WRAPPER_FUNCDECL_END
+%>
+
+<%
+WRAPPER_FUNCDECL_BEGIN(charfunc,1)
+     WRAPPER_ARG_VAL(x,char)
+     WRAPPER_RET_VAL(char)
+WRAPPER_FUNCDECL_BODY
+%>
+{  FSC_RETURN_VAL(x + 1); }
+<%
+WRAPPER_FUNCDECL_END
+%>
+
+<%
+WRAPPER_FUNCDECL_BEGIN(ulongfunc,1)
+     WRAPPER_ARG_VAL(x,unsigned long)
+     WRAPPER_RET_VAL(unsigned long)
+WRAPPER_FUNCDECL_BODY
+%>
+{  FSC_RETURN_VAL(x + 1); }
+<%
+WRAPPER_FUNCDECL_END
+%>
+
+<%
+WRAPPER_FUNCDECL_BEGIN(llfunc,1)
+     WRAPPER_ARG_VAL(x,long long)
+     WRAPPER_RET_VAL(long long)
+WRAPPER_FUNCDECL_BODY
+%>
+{  FSC_RETURN_VAL(x + 1); }
+<%
+WRAPPER_FUNCDECL_END
+%>
+
+<%
+WRAPPER_FUNCDECL_BEGIN(floatfunc,1)
+     WRAPPER_ARG_VAL(x,float)
+     WRAPPER_RET_VAL(float)
+WRAPPER_FUNCDECL_BODY
+%>
+{  return(x + 1.5); }
+<%
+WRAPPER_FUNCDECL_END
+%>
+
+<%
+WRAPPER_FUNCDECL_BEGIN(doublefunc,1)
+     WRAPPER_ARG_VAL(x,double)
+     WRAPPER_RET_VAL(double)
+WRAPPER_FUNCDECL_BODY
+%>
+{  return(x + 1.5); }
+<%
+WRAPPER_FUNCDECL_END
+%>
+
+<%
+WRAPPER_FUNCDECL_BEGIN(fprintf,3)
+     WRAPPER_RET_VAL(int)
+     WRAPPER_ARG_PTR(fp,Sn10stdio_FILE_,1)
+     WRAPPER_ARG_PTRVAL(format,char,1)
+     WRAPPER_ARG_VA()
+     WRAPPER_FUNCDECL_BODY
+%>
+{
+}
+<%
+WRAPPER_FUNCDECL_END
+%>
+
+<%
+/* WRAPPER_FUNCDECL_BEGIN(fdprintf,3)
+     WRAPPER_RET_VAL(pid_t)
+     WRAPPER_ARG_VAL(fd,int)
+     WRAPPER_ARG_PTRVAL(format,char,1)
+     WRAPPER_ARG_VA()
+     WRAPPER_FUNCDECL_END; */
+%>
+
+<%
+WRAPPER_FINISH
+%>

@@ -1,0 +1,43 @@
+/* -*- C -*- */
+
+%% C-PROLOGUE
+#define _XOPEN_SOURCE 600
+#include <stdlib.h>
+#include <string.h>
+#include <locale.h>
+#include <sys/param.h>
+
+%% FSC-PROLOGUE
+#include <stdlib.h>
+
+%% REQUIRED-DECLS
+require_function mktemp;
+
+%% NATIVE-IMPLEMENTATION
+
+#include <fsc_alloc.h>
+#include <wrapper/fscw_helper.h>
+
+/**
+ * @fn char *mktemp(char *tmpl)
+ * @brief create temporary file name
+ *
+ * @author Lepidum Co., Ltd.
+ *
+ * separated from stdlib.fscw to prevent
+ * to avoid gcc "insecure function" warning
+ */
+fscw_pointer fscw_mktemp(fscw_string_param(tmpl))
+{
+  void *t;
+  char *s = wrapper_get_string_z(tmpl_base, tmpl_ofs, &t, "mktemp");
+  char *d = mktemp(s);
+  if (d != NULL) {
+    wrapper_writeback_release_tmpbuf(tmpl_base, tmpl_ofs, t, strlen(s) + 1);
+    return ptrvalue_of_base_ofs(tmpl_base, tmpl_ofs);
+  } else {
+    wrapper_release_tmpbuf(t);
+    return ptrvalue_of_base_ofs(0, 0);
+  }
+}
+

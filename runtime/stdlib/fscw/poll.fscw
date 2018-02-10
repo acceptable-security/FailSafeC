@@ -1,0 +1,48 @@
+/* -*- C -*- */
+
+%% C-PROLOGUE
+#include <poll.h>
+
+%% FSC-PROLOGUE
+#include <poll.h>
+
+%% REQUIRED-DECLS
+typedef nfds_t;
+struct stdlib_pollfd;
+
+require_function poll;
+
+%% NATIVE-IMPLEMENTATION
+
+/**
+ * @fn int poll(struct pollfd *fds, nfds_t nfd, int timeout)
+ * @brief wait multiple input/output
+ *
+ * @author Lepidum Co., Ltd.
+ */
+fscw_int fscw_poll(fscw_pointer_param(fds), fscw_nfds_t_param(n), fscw_int_param(timeout))
+{
+  struct pollfd *p;
+  nfds_t i;
+  int ret;
+
+  p = fsc_alloc_raw(sizeof(*p) * n);
+  for (i = 0; i < n; i++) {
+    fscw_struct_stdlib_pollfd buf;
+    buf = fscw_struct_stdlib_pollfd_read_pointer_param(fds, i);
+    p[i].fd      = fscw_int_read_unwrap(fscw_int_member(&buf, fd));
+    p[i].events  = fscw_short_read_unwrap(fscw_short_member(&buf, events));
+    p[i].revents = fscw_short_read_unwrap(fscw_short_member(&buf, revents));
+  }
+  ret = poll(p, n, timeout);
+  if (ret > 0) {
+    for (i = 0; i < n; i++) {
+      fscw_struct_stdlib_pollfd buf;
+      fscw_int_wrap_write(fscw_int_member(&buf, fd), p[i].fd);
+      fscw_short_wrap_write(fscw_short_member(&buf, events), p[i].events);
+      fscw_short_wrap_write(fscw_short_member(&buf, revents), p[i].revents);
+      fscw_struct_stdlib_pollfd_write_pointer_param(fds, i, buf);
+    }
+  }
+  return fscw_int_wrap(ret);
+}

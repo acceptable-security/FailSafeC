@@ -1,0 +1,38 @@
+/* -*- C -*- */
+
+%% C-PROLOGUE
+#include <utime.h>
+
+%% FSC-PROLOGUE
+#include <utime.h>
+
+%% REQUIRED-DECLS
+typedef time_t;
+struct stdlib_utimbuf;
+require_function utime;
+%% NATIVE-IMPLEMENTATION
+
+/**
+ * @fn int utime(const char *path, const struct utimbuf *times)
+ * @brief set file access and modification times.
+ *
+ * @author Lepidum Co., Ltd.
+ */
+fscw_int fscw_utime(fscw_string_param(file), fscw_pointer_param(utp))
+{
+  fscw_string_buf file_buf = fscw_string_unwrap_param(file, "utime");
+  fscw_struct_stdlib_utimbuf utbuf;
+  struct utimbuf ut;
+  int ret;
+
+  if (base_remove_castflag(utp_base)) {
+    utbuf = fscw_struct_stdlib_utimbuf_read_pointer_param(utp, 0);
+    ut.actime = fscw_time_t_read(fscw_time_t_member(&utbuf, actime));
+    ut.modtime = fscw_time_t_read(fscw_time_t_member(&utbuf, modtime));
+    ret = fscw_int_wrap(utime(file_buf.v, &ut));
+  } else {
+    ret = fscw_int_wrap(utime(file_buf.v, NULL));
+  }
+  fscw_string_release(file_buf);
+  return fscw_int_wrap(ret);
+}

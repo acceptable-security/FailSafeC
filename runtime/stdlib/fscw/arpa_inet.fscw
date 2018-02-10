@@ -1,0 +1,136 @@
+/* -*- C -*- */
+
+%% C-PROLOGUE
+#include <arpa/inet.h>
+
+static uint8_t *s6_addr_of_in6_addr(struct in6_addr *p)
+{
+  return &p->s6_addr[0];
+}
+#undef s6_addr
+
+%% FSC-PROLOGUE
+#include <arpa/inet.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+
+%% REQUIRED-DECLS
+typedef size_t;
+typedef uint8_t;
+typedef uint32_t;
+typedef in_addr_t;
+struct stdlib_in_addr;
+struct stdlib_in6_addr;
+
+auto_generate htonl;
+auto_generate htons;
+auto_generate ntohl;
+auto_generate ntohs;
+require_function inet_ntop;
+require_function inet_pton;
+
+%% NATIVE-IMPLEMENTATION
+#include <arpa/inet.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <string.h>
+#include <errno.h>
+
+/**
+ * @fn const char *inet_ntop(int af, const void *src, char *dst, size_t cnt);
+ * @brief translate address struct to string
+ *
+ * @author Lepidum Co., Ltd.
+ */
+fscw_pointer fscw_inet_ntop(fscw_int_param(af),
+                            fscw_pointer_param(src),
+                            fscw_string_param(dst),
+                            fscw_size_t_param(cnt))
+{
+  if (af == AF_INET) {
+    char *s;
+    const char *r;
+    void *t;
+    struct in_addr addr;
+    fscw_struct_stdlib_in_addr ia = fscw_struct_stdlib_in_addr_read_pointer_param(src, 0);
+    addr.s_addr = fscw_in_addr_t_read_unwrap(fscw_in_addr_t_member(&ia, s_addr));
+    s = wrapper_get_read_buffer(dst_base, dst_ofs, &t, cnt, "inet_ntop");
+    r = inet_ntop(AF_INET, &addr, s, cnt);
+    if (r) {
+      wrapper_writeback_release_tmpbuf(dst_base, dst_ofs, t, strlen(s) + 1);
+      return ptrvalue_of_base_ofs(dst_base, dst_ofs);
+    } else {
+      wrapper_release_tmpbuf(t);
+    }
+  } else if (af == AF_INET6) {
+    char *s;
+    const char *r;
+    void *t;
+    struct in6_addr addr;
+    fscw_struct_stdlib_in6_addr ia;
+    fscw_uint8_t (*pa)[16];
+    int i;
+
+    ia = fscw_struct_stdlib_in6_addr_read_pointer_param(src, 0);
+    pa = fscw_uint8_t_member(&ia, s6_addr);
+    for (i = 0; i < 16; i++) {
+      s6_addr_of_in6_addr(&addr)[i] = fscw_uint8_t_unwrap((*pa)[i]);
+    }
+    s = wrapper_get_read_buffer(dst_base, dst_ofs, &t, cnt, "inet_ntop");
+    r = inet_ntop(AF_INET6, &addr, s, cnt);
+    if (r) {
+      wrapper_writeback_release_tmpbuf(dst_base, dst_ofs, t, strlen(s) + 1);
+      return ptrvalue_of_base_ofs(dst_base, dst_ofs);
+    } else {
+      wrapper_release_tmpbuf(t);
+    }
+  } else {
+    errno = EAFNOSUPPORT;
+  }
+  return fscw_pointer_wrap(0);
+}
+
+/**
+ * @fn int inet_pton(int af, const char *src, void *dst)
+ * @brief translate string to address struct
+ *
+ * @todo AF_INET6 
+ *
+ * @author Lepidum Co., Ltd.
+ */
+fscw_int fscw_inet_pton(fscw_int_param(af),
+                        fscw_string_param(src),
+			fscw_pointer_param(dst))
+{
+  int ret;
+
+  if (af == AF_INET) {
+    struct in_addr ia;
+    fscw_string_buf b = fscw_string_unwrap_param(src, "inet_pton");
+    fscw_struct_stdlib_in_addr buf;
+    ret = inet_pton(AF_INET, b.v, &ia);
+    fscw_in_addr_t_wrap_write(fscw_in_addr_t_member(&buf, s_addr), ia.s_addr);
+    fscw_struct_stdlib_in_addr_write_pointer_param(dst, 0, buf);
+    fscw_string_release(b);
+  } else if (af == AF_INET6) {
+    struct in6_addr ia;
+    fscw_string_buf b = fscw_string_unwrap_param(src, "inet_pton");
+    fscw_struct_stdlib_in6_addr buf;
+    fscw_uint8_t (*pa)[16];
+    int i;
+    ret = inet_pton(AF_INET6, b.v, &ia);
+    pa = fscw_uint8_t_member(&buf, s6_addr);
+    for (i = 0; i < 16; i++) {
+      (*pa)[i] = fscw_uint8_t_wrap(s6_addr_of_in6_addr(&ia)[i]);
+    }
+    fscw_struct_stdlib_in6_addr_write_pointer_param(dst, 0, buf);
+    fscw_string_release(b);
+  } else {
+    errno = EAFNOSUPPORT;
+    ret = -1;
+  }
+
+  return fscw_int_wrap(ret);
+}

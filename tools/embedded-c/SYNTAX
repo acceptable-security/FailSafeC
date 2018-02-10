@@ -1,0 +1,73 @@
+================================================================
+            Syntax description of the "ec" language.
+================================================================
+
+<%# declarations #%>: Evaluates declarations.
+	It is only allowed at script top.
+	Empty lines before top <%# is ignored.
+	A (single) NewLine after #%> is stripped .
+
+<%#shared declarations #%>: Evaluates declarations.
+	Same as %#, but also emitted in embedded (nested) scripts.
+
+<%#libs -lm $%>: Appends -lm in the compiler line.
+
+<%#cflags -I. $%>: Insert -I. in the compiler line.
+
+	These two flags are cumulative:
+	when two or more directives are specified, all of those are
+	concatenated together   These will also be inherited to
+	embedded scripts.
+
+<%#onerror str #%>: Specifies the string emitted if compilation failed.
+
+<% statement %>: Executes statement.
+	The statement may contain unmatched brackets.
+
+<%=02d expression %>: print expression with printf("%02d", expression);
+
+[[%> EC_SCRIPT <%]]: Recursively interprets EC_SCRIPT.
+	Any errors in EC_SCRIPT are fatal (unless <%#onerror #%> is specified).
+	Emitted as a statement.
+	It is allowed only inside <%..%> statement block, and can be nested.
+
+[[?%> EC_SCRIPT <%]]: recursively interpret EC_SCRIPT.
+	Errors are tolerated.
+	Emitted as an expression which reflects
+	whether evaluation is succeeds or not. For example,
+
+	<% if (! [[?%>
+	#define EINVAL <%=d EINVAL %>
+	<%]] ) { %>
+	#define EINVAL (-1)
+	#define EINVAL_UNDEFINED
+	<% } %>
+
+	emits "#define EINVAL 10" when EINVAL is defined to 10,
+	or "#define EINVAL (-1)\n#define EINVAL_UNDEFINED" if
+	EINVAL is not defined at all.
+
+	Currently, embedded scripts are evaluated BEFORE the main script
+	is evaluated.  This means that fatal errors in embedded scripts
+	will make the whole script fail, even is it is not executed 
+	because of if() statement.  This limitation will be removed in 
+	the future, and thus do not depend on this execution order.
+
+An example input:
+	<%#cflags -fsigned-char #%>
+	<%# #include <errno.h> #%>
+	#define errno (*__errno_location())
+	
+	#define EPERM <%=d EPERM %>
+	<% if (0 < (char)-1) { %>
+	#define CHAR_IS_UNSIGNED
+	<% } else { %>
+	#define CHAR_IS_SIGNED
+	<% } %>
+
+The output of above example:
+	#define errno (*__errno_location())
+	
+	#define EPERM 1
+
+        #define CHAR_IS_SIGNED

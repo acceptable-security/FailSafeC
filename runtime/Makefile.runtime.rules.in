@@ -1,0 +1,126 @@
+# -*- makefile -*-
+# Part of Fail-Safe C Runtime. Produced by Yutaka Oiwa.
+# (c) 2001-2005 Yutaka Oiwa.
+# (c) 2005-2009 AIST.
+# (c) 2006	 Lepidum Co. Ltd.
+#
+# This file is distributed under Apache License 2.0 with a special exception.
+# See the file LICENSE contained in the distribution.
+#
+
+all:
+
+CC = @CC@
+CFLAGS = @CFLAGS@
+CPPFLAGS = @CPPFLAGS@
+LDFLAGS = @LDFLAGS@
+
+MKDIR_P = @MKDIR_P@
+LN_S = @LN_S@
+
+FSCC = $(top_srcdir)/../driver/fscc -B $(top_builddir)/..
+
+MAKEFILE = Makefile
+TYPE ?= opt
+
+O = $(TYPE).@OBJEXT@
+A = $(TYPE).a
+
+ALL_OBJS = $(OBJ_NAMES) \
+	$(addsuffix .safe, $(SAFE_OBJ_NAMES)) \
+	$(addsuffix .safe, $(FSCW_OBJ_NAMES))
+
+TYPED_LIB  = $(LIB_NAME).$(A)
+TYPED_OBJS = $(addsuffix .$(O), $(ALL_OBJS))
+TYPED_NORMAL_OBJS = $(addsuffix .$(O), $(filter-out %.safe, $(ALL_OBJS)))
+
+opt_CCOPTION = @FSCC_CFLAGS_OPT_OFLAG@ @FSCC_CFLAGS_OPT@ @FSCC_GCC_TUNE_DEFAULT@ -DFSC_OPTIMIZED_RUNTIME
+debug_CCOPTION = @FSCC_CFLAGS_DEBUG@ -DFSC_DEBUG_RUNTIME
+
+CCOPTION = $(ARCCFLAGS) $($(TYPE)_CCOPTION) $(CFLAGS) $(CPPFLAGS) @DEFS@
+CCINCLUDE = -I$(top_builddir) -I$(top_srcdir) -I. -I$(srcdir)
+
+opt debug:
+	$(MAKE) -f $(MAKEFILE) TYPE=$@ all-objs
+opt-lib:
+	$(MAKE) -f $(MAKEFILE) TYPE=opt lib
+debug-lib:
+	$(MAKE) -f $(MAKEFILE) TYPE=debug lib
+all-subdir:
+	$(MAKE) -f $(MAKEFILE) empty $(ALL_SUBDIR) REC_TARGET=all
+
+
+
+all-objs: $(TYPED_OBJS)
+
+lib: lib-subdir
+	$(MAKE) -f $(MAKEFILE) TYPE=$(TYPE) $(TYPED_LIB)
+
+lib-subdir:
+	$(MAKE) -f $(MAKEFILE) TYPE=$(TYPE) empty $(LIB_SUBDIR) REC_TARGET=all-objs
+
+$(TYPED_LIB): $(TYPED_OBJS) $(wildcard $(addsuffix /*.$(O),$(LIB_SUBDIR) $(ALL_SUBDIR)))
+	rm -f $@
+	$(MAKE) -f $(MAKEFILE) TYPE=$(TYPE) ar-objs $(LIB_SUBDIR) REC_TARGET=ar-objs
+
+ar-objs:
+	$(AR) rsv "$(TYPED_LIB)" $(TYPED_OBJS)
+
+
+
+clean::
+	rm -f *~ *.o *.safe.* $(LIB_NAME).*.a config.h
+	$(MAKE) -f $(MAKEFILE) empty $(LIB_SUBDIR) $(ALL_SUBDIR) REC_TARGET=clean
+
+distclean-sub::
+	$(MAKE) -f $(MAKEFILE) empty $(LIB_SUBDIR) $(ALL_SUBDIR) REC_TARGET=distclean-sub
+	test -f Makefile.in && rm -f Makefile
+
+.PHONY: $(LIB_SUBDIR) $(ALL_SUBDIR)
+$(LIB_SUBDIR) $(ALL_SUBDIR):
+	$(MAKE) -f $(MAKEFILE) -C $@ $(REC_TARGET) TYPE=$(TYPE)
+empty:
+
+
+
+%.$(TYPE).o: %.c
+	$(CC) $(CCINCLUDE) $(CCOPTION) -o $@ -c $<
+
+$(TYPED_NORMAL_OBJS): %.$(TYPE).o: $(srcdir)/%.c
+	$(CC) $(CCINCLUDE) $(CCOPTION) -o $@ -c $<
+
+%.safe.c: $(srcdir)/%.sc
+	$(FSCC) $(FSCCOPTION) --safec-only -o $@ -xfsc $<
+
+%.safe.c: $(srcdir)/%.fscw
+	$(FSCC) $(FSCCOPTION) --safec-only -o $@ $<
+
+%.$(TYPE).s: $(srcdir)/%.c
+	$(CC) $(CCINCLUDE) $(CCOPTION) -S $<
+
+#
+# Makefile update rules
+#
+
+# configure.ac is modified
+#
+enable_reautoconf=@enable_reautoconf@
+ifneq '$(enable_reautoconf)' 'no'
+$(top_srcdir)/configure: $(top_srcdir)/configure.ac $(top_srcdir)/aclocal.m4
+	cd '$(top_srcdir)' && autoconf
+endif
+
+# Makefile.in is modified
+#
+$(MAKEFILE): $(srcdir)/$(MAKEFILE).in $(top_builddir)/config.status
+	cd $(top_builddir) && ./config.status
+
+# Makefile.runtime.rules.in is modified
+#
+$(top_builddir)/Makefile.runtime.rules: $(top_srcdir)/Makefile.runtime.rules.in $(top_builddir)/config.status
+	cd $(top_builddir) && ./config.status
+
+# configure is re-created
+#
+$(top_builddir)/config.status: $(top_srcdir)/configure
+	cd $(top_builddir) && ./config.status --recheck

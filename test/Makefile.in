@@ -1,0 +1,98 @@
+build_cross_compiler = @build_cross_compiler@
+
+srcdir = @srcdir@
+builddir = @builddir@
+top_srcdir = @top_srcdir@/..
+top_builddir = @top_builddir@/..
+
+tests ?= baseline fscc stdio stdlib string unix include net math glob ndbm iconv msgcat
+
+cc = @CC@
+cc_cflags = @CC_CFLAGS@ -D_POSIX_C_SOURCE=200112L -D_XOPEN_SOURCE=600 -D_ISO_C99_SOURCE
+cc_libs = @LIBS@
+
+fsc_cflags = -fuse-c99-tokens
+fsc_libs = -lfsc -lndbm
+
+.PHONY: all test test-cc
+
+all:
+	$(MAKE) compile-test && $(MAKE) run-test-$(build_cross_compiler)
+
+test: all
+
+test-cc: 
+	$(MAKE) compile-test-cc
+	$(MAKE) run-test-cc
+
+.PHONY: compile-test compile-test-fsc compile-test-cc
+
+compile-test: compile-test-fsc
+
+compile-test-fsc:
+	SUFFIX=fsc \
+	DRIVERCC=$(cc) \
+	DRIVERCFLAGS='-DSUFFIX="fsc"' \
+	FSCC='$(top_srcdir)/driver/fscc -B $(top_builddir)' \
+	CFLAGS='$(fsc_cflags) -I$(srcdir)/common -DTEST_ROOT_DIR="$(srcdir)" $(CFLAGS)' \
+	LIBS='$(fsc_libs)' \
+	$(srcdir)/compile.sh $(tests)
+
+# suffix is changed to "native", as "make test" confuses if there is "test.cc".
+compile-test-cc:
+	SUFFIX=native \
+	DRIVERCC=$(cc) \
+	DRIVERCFLAGS='-DSUFFIX="native" -DFSC_ABRT=GCC_ABRT' \
+	FSCC=$(cc) \
+	CFLAGS='$(cc_cflags) -I$(srcdir)/common -DTEST_ROOT_DIR="$(srcdir)" $(CFLAGS)' \
+	LFLAGS='' \
+	LIBS='$(cc_libs)' \
+	$(srcdir)/compile.sh $(tests)
+
+.PHONY: run-test-native run-test-fsc run-test-cc run-test-cross
+
+run-test-native: run-test-fsc
+
+run-test-fsc:
+	SUFFIX=fsc $(srcdir)/run.sh
+
+run-test-cc:
+	SUFFIX=native $(srcdir)/run.sh
+
+run-test-cross:
+
+.PHONY: clean distclean-sub
+
+clean:
+	$(MAKE) -C common clean
+	rm -f test_temp2 testlist.c test_stdout */*.link.test */*/*.link.test */*.test.o */*/*.test.o \
+		*.test.safe.c *.test.safe.o *.link.test..linkstub.s* \
+		test.fsc..linkstub.s* \
+	rm -rf test_temp_dir
+
+distclean-sub:
+	$(MAKE) -C manualtest clean
+	rm -f test.fsc test.native \
+		driver.fsc driver.native \
+		compile.fsc.log compile.fsc.err.log \
+		test.fsc.log test.fsc.err.log \
+		compile.native.log compile.native.err.log \
+		test.native.log test.native.err.log
+	rm -f config.log config.status Makefile
+	rm -rf autom4te.cache
+
+.PHONY: docs
+docs:
+	doxygen doxygen.conf
+
+enable_reautoconf=@enable_reautoconf@
+ifneq '$(enable_reautoconf)' 'no'
+$(srcdir)/configure: $(srcdir)/configure.ac $(srcdir)/aclocal.m4
+	cd '$(srcdir)' && autoconf
+endif
+
+Makefile: $(srcdir)/Makefile.in config.status
+	./config.status
+
+config.status: $(srcdir)/configure
+	./config.status --recheck

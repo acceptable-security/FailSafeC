@@ -1,0 +1,28 @@
+all:
+
+OCAML_BYTECODE_ONLY=@OCAML_BYTECODE_ONLY@
+OCAMLC_WARNS=@OCAMLC_WARNS@
+ALL_LIBRARY_TARGETS=bcl $(if $(OCAML_BYTECODE_ONLY),,ncl)
+ALL_EXECUTIVE_TARGETS=bc $(if $(OCAML_BYTECODE_ONLY),,nc)
+
+OCAMLBCFLAGS := $(OCAML_DEFAULT_FLAGS) -warn-error $(OCAMLC_WARNS) -g
+OCAMLNCFLAGS := $(OCAML_DEFAULT_FLAGS) -warn-error $(OCAMLC_WARNS)
+OCAMLBLDFLAGS := -g
+
+Makefile: $(srcdir)/Makefile.in ../config.status
+	cd .. && ./config.status
+
+../Makefile.ocamlc-common: $(srcdir)/../Makefile.ocamlc-common.in ../config.status
+	cd .. && ./config.status
+
+copy_progs: ../compiler/$(RESULT).bc $(if $(OCAML_BYTECODE_ONLY),,../compiler/$(RESULT).nc)
+
+../compiler:
+	mkdir -p ../compiler
+
+../compiler/$(RESULT).bc: ../compiler $(RESULT).bc
+	cp $(RESULT).bc ../compiler
+
+../compiler/$(RESULT).nc: ../compiler $(RESULT).nc
+	cp $(RESULT).nc ../compiler
+

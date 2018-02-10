@@ -1,0 +1,37 @@
+/* -*- C -*- */
+/* 
+   Part of Fail-Safe C Standard Library. Produced by Yutaka Oiwa.
+   (c) 2001-2005 Yutaka Oiwa.
+   (c) 2005-2009 AIST.
+   (c) 2006	 Lepidum, Inc.
+
+   This file is written by Yutaka Oiwa in 2009. */
+
+%% C-PROLOGUE
+#include <unistd.h>
+#include <sys/mman.h>
+
+%% FSC-PROLOGUE
+#include <sys/mman.h>
+#include <unistd.h>
+
+%% REQUIRED-DECLS
+auto_generate getpagesize;
+provide_function munmap;
+provide_function mprotect;
+
+%% NATIVE-IMPLEMENTATION
+
+#include <fsc_mman.h>
+
+fscw_int fscw_munmap(fscw_pointer_param(p), fscw_size_t_param(len)) {
+    fsc_mapped_block *b = fscblock_to_mapped_block(p_base);
+    fsc_unmap_mmapped_page(b, (void *)vaddr_of_base_ofs(p_base, p_ofs), len);
+    return fscw_int_wrap(0);
+}
+
+fscw_int fscw_mprotect(fscw_pointer_param(p), fscw_size_t_param(len), fscw_int_param(prot)) {
+    fsc_mapped_block *b = fscblock_to_mapped_block(p_base);
+    return fscw_int_wrap(fsc_change_page_protections(b, (void *)vaddr_of_base_ofs(p_base, p_ofs), len, prot));
+}
+

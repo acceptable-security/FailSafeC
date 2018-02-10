@@ -1,0 +1,17 @@
+/*
+   This file is written by Lepidum Co., Ltd.
+   Copyright (c) 2005-2006 by Lepidum Co., Ltd.
+ */
+
+??=include <string.h>
+??=include "common.h"
+
+TEST_CASE(C99_5_2_1_1_trigraph)
+??<
+  TEST_FAIL_IF("\n"??(0??) != '??/n');
+  TEST_FAIL_IF((1??!2)!=3);
+  TEST_FAIL_IF((1??'3)!=2);
+  TEST_FAIL_IF(??-1!=~1);
+  TEST_FAIL_IF(strcmp("???=??(??/n??)??'??<??!??>??-", "?#[\n]^{|}~") != 0);
+  TEST(1);
+??>

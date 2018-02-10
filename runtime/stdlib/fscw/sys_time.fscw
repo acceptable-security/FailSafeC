@@ -1,0 +1,80 @@
+/* -*- C -*- */
+
+%% C-PROLOGUE
+#include <sys/time.h>
+
+%% FSC-PROLOGUE
+#include <sys/time.h>
+
+%% REQUIRED-DECLS
+struct stdlib_itimerval;
+struct stdlib_select_timeval;
+
+require_function getitimer;
+require_function setitimer;
+
+%% NATIVE-IMPLEMENTATION
+
+#include <wrapper/fscw_helper.h>
+
+static void wrap_itimerval(fscw_struct_stdlib_itimerval *dst, struct itimerval *src)
+{
+  fscw_struct_stdlib_select_timeval *p;
+  p = fscw_struct_stdlib_select_timeval_member(dst, it_interval);
+  fscw_long_wrap_write(fscw_long_member(p, tv_sec), src->it_interval.tv_sec);
+  fscw_long_wrap_write(fscw_long_member(p, tv_usec), src->it_interval.tv_usec);
+  p = fscw_struct_stdlib_select_timeval_member(dst, it_value);
+  fscw_long_wrap_write(fscw_long_member(p, tv_sec), src->it_value.tv_sec);
+  fscw_long_wrap_write(fscw_long_member(p, tv_usec), src->it_value.tv_usec);
+}
+
+static void unwrap_itimerval(struct itimerval *dst, fscw_struct_stdlib_itimerval *src)
+{
+  fscw_struct_stdlib_select_timeval *p;
+  p = fscw_struct_stdlib_select_timeval_member(src, it_interval);
+  dst->it_interval.tv_sec  = fscw_long_read_unwrap(fscw_long_member(p, tv_sec));
+  dst->it_interval.tv_usec = fscw_long_read_unwrap(fscw_long_member(p, tv_usec));
+  p = fscw_struct_stdlib_select_timeval_member(src, it_value);
+  dst->it_value.tv_sec  = fscw_long_read_unwrap(fscw_long_member(p, tv_sec));
+  dst->it_value.tv_usec = fscw_long_read_unwrap(fscw_long_member(p, tv_usec));
+}
+
+/**
+ * @fn int getitimer(int which, struct itimerval *value)
+ * @brief get timer
+ *
+ * @author Lepidum Co., Ltd.
+ */
+fscw_int fscw_getitimer(fscw_int_param(which), fscw_pointer_param(val))
+{
+  fscw_struct_stdlib_itimerval buf;
+  struct itimerval v;
+  int ret = getitimer(which, &v);
+  if (ret == 0) {
+    wrap_itimerval(&buf, &v);
+    fscw_struct_stdlib_itimerval_write_pointer_param(val, 0, buf);
+  }
+  return fscw_int_wrap(ret);
+}
+
+/**
+ * @fn in setitimer(int which, const struct itimerval *v, struct itimerval *ov)
+ * @brief set timer
+ *
+ * @author Lepidum Co., Ltd.
+ */
+fscw_int fscw_setitimer(fscw_int_param(which), fscw_pointer_param(val), fscw_pointer_param(oval))
+{
+  fscw_struct_stdlib_itimerval buf;
+  struct itimerval v, ov = {{0}};
+  int ret;
+  buf = fscw_struct_stdlib_itimerval_read_pointer_param(val, 0);
+  unwrap_itimerval(&v, &buf);
+  ret = setitimer(which, &v, &ov);
+  if (ret == 0 && !fscw_is_null(oval)) {
+    wrap_itimerval(&buf, &ov);
+    fscw_struct_stdlib_itimerval_write_pointer_param(oval, 0, buf);
+  }
+  return fscw_int_wrap(ret);
+}
+

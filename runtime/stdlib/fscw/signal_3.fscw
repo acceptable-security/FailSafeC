@@ -1,0 +1,114 @@
+/* -*- C -*- */
+
+%% C-PROLOGUE
+#define _XOPEN_SOURCE 500
+#include <signal.h>
+#undef sa_handler
+#undef sa_sigaction
+
+%% FSC-PROLOGUE
+#include <signal.h>
+
+%% REQUIRED-DECLS
+auto_generate killpg;
+auto_generate sighold;
+auto_generate sigignore;
+auto_generate sigpause;
+auto_generate sigrelse;
+auto_generate siginterrupt;
+typedef sigset_t;
+require_function sigsuspend;
+require_function sigpending;
+require_function sigwait;
+
+%% NATIVE-IMPLEMENTATION
+#include <copydata.h>
+
+static void wrap_sigset_t(fscw_sigset_t *dst, const sigset_t *src)
+{
+  int i;
+  fscw_char (*p)[_NSIG];
+  p = fscw_char_member(dst, v);
+
+  for (i = 0; i < _NSIG; i++) {
+    int t = sigismember(src, i);
+    fscw_char_wrap_write(&(*p)[i], (t == 1));
+  }
+}
+
+static void unwrap_sigset_t(sigset_t *dst, const fscw_sigset_t *src)
+{
+  int i;
+  const fscw_char (*p)[_NSIG];
+  p = fscw_char_member(src, v);
+
+  sigemptyset(dst);
+  for (i = 0; i < _NSIG; i++) {
+    if (fscw_char_read_unwrap(&(*p)[i])) {
+      sigaddset(dst, i);
+    }
+  }
+}
+
+/**
+ * @fn int sigsuspend(const sigset_t *mask);
+ * @brief wait until specified signal is delivered.
+ *
+ * @author Lepidum Co., Ltd.
+ */
+fscw_int fscw_sigsuspend(fscw_pointer_param(sigmask))
+{
+  int ret;
+  sigset_t n_sigmask;
+  fscw_sigset_t sigmask_buf;
+
+  sigmask_buf = fscw_sigset_t_read_pointer_param(sigmask, 0);
+  unwrap_sigset_t(&n_sigmask, &sigmask_buf);
+
+  ret = sigsuspend(&n_sigmask);
+
+  return fscw_int_wrap(ret);
+}
+
+/**
+ * @fn int sigpending(sigset_t *set);
+ * @brief peek blocking signals.
+ *
+ * @author Lepidum Co., Ltd.
+ */
+fscw_int fscw_sigpending(fscw_pointer_param(set))
+{
+  int ret;
+  sigset_t n_set;
+
+  ret = sigpending(&n_set);
+  if (ret == 0) {
+    fscw_sigset_t set_buf;
+    wrap_sigset_t(&set_buf, &n_set);
+    fscw_sigset_t_write_pointer_param(set, 0, set_buf);
+  }
+  return fscw_int_wrap(ret);
+}
+
+/**
+ * @fn int sigwait(const sigset_t *set, int *sig);
+ * @brief wait until specified signal is in queue.
+ *
+ * @author Lepidum Co., Ltd.
+ */
+fscw_int fscw_sigwait(fscw_pointer_param(set), fscw_pointer_param(sig))
+{
+  int ret;
+  fscw_sigset_t set_buf;
+  sigset_t n_set;
+  int n_sig;
+
+  set_buf = fscw_sigset_t_read_pointer_param(set, 0);
+  unwrap_sigset_t(&n_set, &set_buf);
+
+  ret = sigwait(&n_set, &n_sig);
+  if (ret == 0) {
+    fscw_int_write_pointer_param(sig, 0, n_sig);
+  }
+  return fscw_int_wrap(ret);
+}

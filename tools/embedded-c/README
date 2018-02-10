@@ -1,0 +1,73 @@
+NAME
+
+    ec - embedded C processor
+
+SYNOPSIS
+
+    ec [options] [file ...]
+
+      Options:
+        -l file                Write process log to file
+        --keep-temp-dir        Keep contents of temporary directory after use
+        --work-on-current-dir  Generate all temporary files in current directory
+        --debug=n              Set debug level (default=1 if -l given, 0 otherwise)
+	--cc compiler	       Set name of the C compiler to use
+        -h, --help             Show this message
+
+DESCRIPTION
+
+    "ec" reads script from either command-line-specified file or
+    standard input.  Basically, contents of the input is copied into
+    output.  However, directives enclosed by <% %> is treated as a
+    (part of) C statements.  This can be used to conditionally filters
+    some of input text, to embed results of some computations into
+    output, or to perform anything further complicated things.  In
+    addition, <%=fmt exp %> emits the runtime value of the C
+    expression "exp", formatted by printf(3) format "%fmt". (it is
+    just the shortcut for '<% printf("%fmt", exp); %>'.) The complete
+    syntax is described in the file SYNTAX.
+
+    Internally, ec generates a set of C sources which prints the
+    contents of the input by fwrite(3).  The statements inside <% %>
+    are copied verbatimly into the C sources.  These files are then
+    processed by GCC compiler and executed.
+
+OPTIONS
+
+    "-l": it specifies the name of the log file. This file will
+    contain all diagnostic or error messages output from compilers.
+
+    "--keep-temp-dir": By default, the temporary sources files and
+    executables are generated in a temporary directory, and removed
+    when the processing is finished (either succeed or failed).  This
+    option prevents the temporary directory to be removed.  The name
+    of the temporary directory will be printted.
+
+    "--work-on-current-dir": This inhibits the use of a temporary
+    directory.  Instead, all temporary files (named "ec_work_*.c" and
+    "ec_work_*.exe", where * is a number starts from 0) are emit to
+    the current directory.  This option implies the behaviour of
+    --keep-temp-dir, thus these temporary files will remain after
+    processing.
+
+    "--debug" sprcifies the debug level of the processor.  Debug level
+    1 outputs all messages from compilers (same as those output by
+    -l).  The levels more than 1 will not be interesting to casual
+    users.  If specified with the "-l" option, the debug messages will
+    go to the log file.
+
+SECURITY
+
+    By the nature of the processing, the ec scripts can do anything
+    which can be done with the privilege of the running user.  Be very
+    careful about processing the files given from other people (as in
+    the same way as to execute given shell scripts, Perl/Ruby scripts,
+    Makefiles, and others.)
+
+    The script will be executed in the current directory.
+
+    The compiler options specified by <%#cflags#%> and <%#libs#%>
+    directives are passed "as is" to the shell which invokes
+    compilers. Shell meta characters such as < > or | will be
+    interpreted, and some options such as -o may confuse either
+    shell or GCC compiler, or both.

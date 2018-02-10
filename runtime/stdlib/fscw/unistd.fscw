@@ -1,0 +1,192 @@
+/* -*- C -*- */
+/* 
+   Part of Fail-Safe C Runtime. Produced by Yutaka Oiwa.
+   (c) 2001-2005 Yutaka Oiwa.
+   (c) 2005-2006 AIST.
+   (c) 2006	 Lepidum Co. Ltd.
+
+   This file is written by Lepidum Co. Ltd. in 2006.
+
+   This file is distributed under Apache License 2.0 with a special exception.
+   See the file LICENSE contained in the distribution.
+*/
+
+%% C-PROLOGUE
+#define _BSD_SOURCE
+#define _XOPEN_SOURCE 600
+#include <unistd.h>
+#include <limits.h>
+#include <string.h>
+
+%% FSC-PROLOGUE
+#include <unistd.h>
+extern int execve(const char *path, char *const *argv, char *const *envp);
+
+%% REQUIRED-DECLS
+
+auto_generate _exit;
+auto_generate alarm;
+auto_generate chown;
+auto_generate close;
+auto_generate dup;
+auto_generate dup2;
+auto_generate fchown;
+auto_generate fchdir;
+auto_generate fdatasync;
+auto_generate fork;
+auto_generate fpathconf;
+auto_generate fsync;
+auto_generate ftruncate;
+auto_generate getegid;
+auto_generate geteuid;
+auto_generate getgid;
+auto_generate gethostid;
+auto_generate getlogin;
+auto_generate getpass;
+auto_generate getpgid;
+auto_generate getppid;
+auto_generate getpgrp;
+auto_generate getpid;
+auto_generate getppid;
+auto_generate getsid;
+auto_generate getuid;
+auto_generate isatty;
+auto_generate lchown;
+auto_generate lockf;
+auto_generate lseek;
+auto_generate nice;
+auto_generate pathconf;
+auto_generate pause;
+auto_generate rmdir;
+auto_generate setegid;
+auto_generate seteuid;
+auto_generate setgid;
+auto_generate setpgid;
+auto_generate setpgrp;
+auto_generate setregid;
+auto_generate setreuid;
+auto_generate setsid;
+auto_generate setuid;
+auto_generate sleep;
+auto_generate sync;
+auto_generate sysconf;
+auto_generate tcgetpgrp;
+auto_generate tcsetpgrp;
+auto_generate ttyname;
+auto_generate ttyslot;
+auto_generate ualarm;
+auto_generate usleep;
+auto_generate vfork;
+
+require_function execve;
+
+require_function getlogin_r;
+
+require_function getwd;
+
+require_function confstr;
+
+%% NATIVE-IMPLEMENTATION
+
+#include <wrapper/fscw_helper.h>
+#include "../stdlib_util.h"
+
+extern char **environ;
+
+
+/**
+ * @fn int execve(const char *path, char *const *argv, char *const *envp)
+ * @brief execute file and replace process image
+ *
+ * @author Yutaka Oiwa
+ */
+fscw_int fscw_execve(fscw_pointer_param(file), fscw_pointer_param(arg),
+		     fscw_pointer_param(envp))
+{
+  fscw_string_buf path = fscw_string_unwrap_param(file, "execve");
+  void *t1, *t2;
+  char **argv = copy_argv_to_raw(arg_base, arg_ofs, &t1, -1, "execve");
+  char **envp = copy_argv_to_raw(envp_base, envp_ofs, &t2, -1, "execve");
+
+  int ret;
+
+  ret = execve(path.v, argv, envp);
+  
+  fscw_string_release(path);
+  release_argv_tempbuf(t1);
+  release_argv_tempbuf(t2);
+  return fscw_int_wrap(ret);
+}
+
+/**
+ * @fn int getlogin_r(char *s, size_t sz)
+ * @brief get login name
+ *
+ * @author Lepidum Co., Ltd.
+ */
+fscw_int fscw_getlogin_r(fscw_string_param(s), fscw_size_t_param(sz))
+{
+  void *t;
+  char *p = wrapper_get_read_buffer(s_base, s_ofs, &t, sz, "getlogin_r");
+  int ret = getlogin_r(p, sz);
+  if (ret == 0) {
+    wrapper_writeback_release_tmpbuf(s_base, s_ofs, t, strlen(p) + 1);
+  } else {
+    wrapper_release_tmpbuf(t);
+  }
+  return fscw_int_wrap(ret);
+}
+
+/**
+ * @fn char *getwd(char *buf)
+ * @brief get working directory
+ *
+ * @author Lepidum Co., Ltd.
+ */
+fscw_pointer fscw_getwd(fscw_pointer_param(buf))
+{
+  char b[PATH_MAX+1];
+  char *r = getcwd(b, sizeof b);
+  if (r) {
+    fscw_buffer p;
+    p = fscw_buffer_get_for_read(fscw_base_ofs(buf), strlen(r) + 1, "getwd");
+    strcpy(p.v, r);
+    fscw_buffer_writeback_release(fscw_base_ofs(buf), p, strlen(r) + 1);
+    return ptrvalue_of_base_ofs(buf_base, buf_ofs);
+  }
+  return fscw_pointer_wrap(NULL);
+}
+
+
+/**
+ * @fn size_t confstr(int name, char *buf, size_t len)
+ * @brief read configuration variables
+ *
+ * @author Lepidum Co., Ltd.
+ */
+fscw_size_t fscw_confstr(fscw_int_param(name),
+                         fscw_pointer_param(buf),
+                         fscw_size_t_param(len))
+{
+  size_t r;
+  fscw_buffer b;
+
+  if (len == 0) {
+    if (fscw_is_not_null(buf)) {
+      fsc_raise_error_library(buf_base, buf_ofs, ERR_INVALIDARGS, "confstr: buf must be NULL when len is 0");
+    }
+    r = confstr(name, NULL, 0);
+    return fscw_size_t_wrap(r);
+  }
+
+  b = fscw_buffer_get_for_read(fscw_base_ofs(buf), len, "confstr");
+
+  r = confstr(name, b.v, len);
+
+  if (r)
+    fscw_buffer_writeback_release(fscw_base_ofs(buf), b, r);
+  else
+    fscw_buffer_release(b);
+
+  return fscw_size_t_wrap(r);
+}

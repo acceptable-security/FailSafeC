@@ -1,0 +1,12 @@
+/* -*- C -*- */
+
+%% C-PROLOGUE
+#include <fnmatch.h>
+
+%% FSC-PROLOGUE
+#include <fnmatch.h>
+
+%% REQUIRED-DECLS
+auto_generate fnmatch;
+
+%% NATIVE-IMPLEMENTATION

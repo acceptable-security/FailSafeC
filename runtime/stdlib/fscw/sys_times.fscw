@@ -1,0 +1,54 @@
+/* -*- C -*- */
+/* 
+   Part of Fail-Safe C Runtime. Produced by Yutaka Oiwa.
+   (c) 2001-2005 Yutaka Oiwa.
+   (c) 2005-2006 AIST.
+   (c) 2006	 Lepidum Co. Ltd.
+
+   This file is written by Lepidum Co. Ltd. in 2006.
+
+   This file is distributed under Apache License 2.0 with a special exception.
+   See the file LICENSE contained in the distribution.
+*/
+%% C-PROLOGUE
+#include <sys/times.h>
+
+%% FSC-PROLOGUE
+#include <sys/times.h>
+
+%% REQUIRED-DECLS
+typedef clock_t;
+struct stdlib_tms;
+
+require_function times;
+
+%% NATIVE-IMPLEMENTATION
+
+/**
+ * @fn clock_t times(struct tms *buffer)
+ * @brief get process times
+ * @param buffer process times is stored.
+ * @retval elapsed real time in clock_t, (clock_t)-1 on fail.
+ *
+ * @crashcase illegal pointer, buffer overflow
+ * @fsctype struct(wo)
+ *
+ * @author Lepidum Co., Ltd.
+ */
+fscw_clock_t fscw_times(fscw_pointer_param(tms))
+{
+  fscw_struct_stdlib_tms tms_buf;
+  struct tms tms_n;
+  clock_t ret;
+
+  ret = times(&tms_n);
+  if (ret != 0) {
+    fscw_clock_t_wrap_write(fscw_clock_t_member(&tms_buf, tms_utime),  tms_n.tms_utime);
+    fscw_clock_t_wrap_write(fscw_clock_t_member(&tms_buf, tms_stime),  tms_n.tms_stime);
+    fscw_clock_t_wrap_write(fscw_clock_t_member(&tms_buf, tms_cutime), tms_n.tms_cutime);
+    fscw_clock_t_wrap_write(fscw_clock_t_member(&tms_buf, tms_cstime), tms_n.tms_cstime);
+
+    fscw_struct_stdlib_tms_write_pointer_param(tms, 0, tms_buf);
+  }
+  return fscw_clock_t_wrap(ret);
+}

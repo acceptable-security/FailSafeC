@@ -1,0 +1,589 @@
+/* -*- C -*- */
+/* 
+   Part of Fail-Safe C Runtime. Produced by Yutaka Oiwa.
+   (c) 2001-2005 Yutaka Oiwa.
+   (c) 2005-2006 AIST.
+   (c) 2006	 Lepidum Co. Ltd.
+
+   This file is written by Lepidum Co. Ltd. in 2006.
+
+   This file is distributed under Apache License 2.0 with a special exception.
+   See the file LICENSE contained in the distribution.
+*/
+
+%% C-PROLOGUE
+#define _XOPEN_SOURCE 500
+#include <netdb.h>
+
+#define pointer_is_null(arg) (base_remove_castflag(arg ## _base) == 0 && (arg ## _ofs) == 0)
+
+%% FSC-PROLOGUE
+#include <netdb.h>
+
+%% REQUIRED-DECLS
+struct stdlib_hostent;
+struct stdlib_netent;
+struct stdlib_servent;
+struct stdlib_protoent;
+struct stdlib_addrinfo;
+
+require_function gethostbyaddr;
+require_function gethostbyname;
+require_function gethostent;
+
+require_function getnetbyaddr;
+require_function getnetbyname;
+require_function getnetent;
+
+require_function getprotobyname;
+require_function getprotobynumber;
+require_function getprotoent;
+
+require_function getservbyname;
+require_function getservbyport;
+require_function getservent;
+
+require_function gai_strerror;
+require_function freeaddrinfo;
+require_function getnameinfo;
+require_function getaddrinfo;
+
+auto_generate sethostent;
+auto_generate setnetent;
+auto_generate setprotoent;
+auto_generate setservent;
+
+auto_generate endhostent;
+auto_generate endnetent;
+auto_generate endprotoent;
+auto_generate endservent;
+
+%% NATIVE-IMPLEMENTATION
+
+#include <string.h>
+
+static fscw_pointer copy_hostent(struct hostent *hent)
+{
+  fscw_struct_stdlib_hostent *dst_hostent;
+  int i;
+  if (!hent) return fscw_pointer_wrap(0);
+
+  dst_hostent = fscw_struct_stdlib_hostent_alloc(1);
+
+  fscw_string_wrap_write(fscw_string_member(dst_hostent, h_name), hent->h_name);
+
+  /* copy h_aliases */
+  {
+    int n_aliases;
+    fscw_pointer *p_aliases;
+    
+    for (n_aliases = 0; hent->h_aliases[n_aliases] != NULL; n_aliases++)
+      ;
+    p_aliases = fscw_string_alloc(n_aliases + 1);
+    for (i = 0; i < n_aliases; i++) {
+      p_aliases[i] = fscw_string_wrap(hent->h_aliases[i]);
+    }
+    p_aliases[n_aliases] = fscw_pointer_wrap(0);
+
+    fscw_pointer_wrap_write(fscw_pointer_member(dst_hostent, h_aliases), p_aliases);
+  }
+
+  /* copy h_addr_list */
+  {
+    int n_addr;
+    fscw_pointer *p_addr_list;
+    
+    for (n_addr = 0; hent->h_addr_list[n_addr] != NULL; n_addr++)
+      ;
+    p_addr_list = (fscw_pointer *)fsc_alloc_static_block(&fsc_typeinfo_Pc.val, n_addr + 1);
+    for (i = 0; i < n_addr; i++) {
+      base_t addr_b = fsc_alloc_static_block(&fsc_typeinfo_c.val, hent->h_length);
+      unsigned char *addr = get_realoffset_c(addr_b, 0);
+      memcpy(addr, hent->h_addr_list[i], hent->h_length);
+      p_addr_list[i] = ptrvalue_of_base_ofs(addr_b, 0);
+    }
+    p_addr_list[n_addr] = ptrvalue_of_base_ofs(0, 0);
+    dst_hostent->FSC_FIELD_NAME(h_addr_list).cv = ptrvalue_of_base_ofs((base_t)p_addr_list, 0);
+  }
+  
+  dst_hostent->FSC_FIELD_NAME(h_addrtype).cv = value_of_int(hent->h_addrtype);
+  dst_hostent->FSC_FIELD_NAME(h_length).cv = value_of_int(hent->h_length);
+
+  return ptrvalue_of_base_ofs((base_t)dst_hostent, 0);
+}
+
+static fscw_pointer copy_netent(struct netent *nent)
+{
+  fscw_struct_stdlib_netent *dst_netent;
+  int i;
+
+  if (!nent) return fscw_pointer_wrap(0);
+
+  dst_netent = fscw_struct_stdlib_netent_alloc(1);
+
+  fscw_string_wrap_write(fscw_string_member(dst_netent, n_name), nent->n_name);
+
+  /* copy n_aliases */
+  {
+    int n_aliases;
+    fscw_pointer *p_aliases;
+    
+    for (n_aliases = 0; nent->n_aliases[n_aliases] != NULL; n_aliases++)
+      ;
+    p_aliases = fscw_string_alloc(n_aliases + 1);
+    for (i = 0; i < n_aliases; i++) {
+      p_aliases[i] = fscw_string_wrap(nent->n_aliases[i]);
+    }
+    p_aliases[n_aliases] = fscw_pointer_wrap(0);
+
+    fscw_pointer_wrap_write(fscw_pointer_member(dst_netent, n_aliases), p_aliases);
+  }
+
+  fscw_int_wrap_write(fscw_int_member(dst_netent, n_addrtype), nent->n_addrtype);
+  fscw_uint32_t_wrap_write(fscw_uint32_t_member(dst_netent, n_net), nent->n_net);
+
+  return fscw_pointer_wrap(dst_netent);
+}
+
+static fscw_pointer copy_servent(struct servent *sent)
+{
+  struct struct_Sn14stdlib_servent_ *dst_servent;
+  int i;
+
+  if (!sent) return fscw_pointer_wrap(NULL);
+  
+  dst_servent = (struct struct_Sn14stdlib_servent_ *)fsc_alloc_static_block(&fsc_typeinfo_Sn14stdlib_servent_.val, 1);
+
+  /* copy s_name */
+  dst_servent->FSC_FIELD_NAME(s_name).cv = wrapper_make_new_static_string(sent->s_name);
+
+  /* copy s_aliases */
+  {
+    int n_aliases;
+    fscw_pointer *p_aliases;
+    
+    for (n_aliases = 0; sent->s_aliases[n_aliases] != NULL; n_aliases++)
+      ;
+    p_aliases = (fscw_pointer *)fsc_alloc_static_block(&fsc_typeinfo_Pc.val, n_aliases + 1);
+    for (i = 0; i < n_aliases; i++) {
+      p_aliases[i] = wrapper_make_new_static_string(sent->s_aliases[i]);
+    }
+    p_aliases[n_aliases] = ptrvalue_of_base_ofs(0, 0);
+    dst_servent->FSC_FIELD_NAME(s_aliases).cv = ptrvalue_of_base_ofs((base_t)p_aliases, 0);
+  }
+
+  dst_servent->FSC_FIELD_NAME(s_port).cv = value_of_int(sent->s_port);
+  dst_servent->FSC_FIELD_NAME(s_proto).cv = wrapper_make_new_static_string(sent->s_proto);
+
+  return ptrvalue_of_base_ofs((base_t)dst_servent, 0);
+}
+
+static fscw_pointer copy_protoent(struct protoent *pent)
+{
+  struct struct_Sn15stdlib_protoent_ *dst_protoent;
+  int i;
+
+  if (!pent) return fscw_pointer_wrap(NULL);
+
+  dst_protoent = (struct struct_Sn15stdlib_protoent_ *)fsc_alloc_static_block(&fsc_typeinfo_Sn15stdlib_protoent_.val, 1);
+
+  /* copy s_name */
+  dst_protoent->FSC_FIELD_NAME(p_name).cv = wrapper_make_new_static_string(pent->p_name);
+
+  /* copy p_aliases */
+  {
+    int n_aliases;
+    fscw_pointer *p_aliases;
+    
+    for (n_aliases = 0; pent->p_aliases[n_aliases] != NULL; n_aliases++)
+      ;
+    p_aliases = (fscw_pointer *)fsc_alloc_static_block(&fsc_typeinfo_Pc.val, n_aliases + 1);
+    for (i = 0; i < n_aliases; i++) {
+      p_aliases[i] = wrapper_make_new_static_string(pent->p_aliases[i]);
+    }
+    p_aliases[n_aliases] = ptrvalue_of_base_ofs(0, 0);
+    dst_protoent->FSC_FIELD_NAME(p_aliases).cv = ptrvalue_of_base_ofs((base_t)p_aliases, 0);
+  }
+
+  dst_protoent->FSC_FIELD_NAME(p_proto).cv = value_of_int(pent->p_proto);
+
+  return ptrvalue_of_base_ofs((base_t)dst_protoent, 0);
+}
+
+static fscw_pointer copy_addrinfo(struct addrinfo *ai)
+{
+  if (ai == NULL) {
+    return ptrvalue_of_base_ofs(0, 0);
+  } else {
+    int i, n;
+    fscw_struct_stdlib_addrinfo *res;
+    struct addrinfo *p;
+
+    for (p = ai, n = 0; p; p = p->ai_next, n++)
+      ;
+    res = fscw_struct_stdlib_addrinfo_alloc(n);
+    for (i = 0, p = ai; i < n; i++, p = p->ai_next) {
+      void *addr = NULL;
+      fscw_pointer canonname = ptrvalue_of_base_ofs(0, 0);
+
+      addr = (void *)fsc_alloc_static_block(&fsc_typeinfo_c.val, p->ai_addrlen);
+      memcpy(addr, p->ai_addr, p->ai_addrlen);
+      if (p->ai_canonname) {
+        canonname = wrapper_make_new_static_string(p->ai_canonname);
+      }
+
+      res[i].FSC_FIELD_NAME(ai_flags).cv     = value_of_int(p->ai_flags);
+      res[i].FSC_FIELD_NAME(ai_family).cv    = value_of_int(p->ai_family);
+      res[i].FSC_FIELD_NAME(ai_socktype).cv  = value_of_int(p->ai_socktype);
+      res[i].FSC_FIELD_NAME(ai_protocol).cv  = value_of_int(p->ai_protocol);
+      res[i].FSC_FIELD_NAME(ai_addrlen).cv   = value_of_int(p->ai_addrlen);
+      res[i].FSC_FIELD_NAME(ai_addr).cv      = ptrvalue_of_base_ofs((base_t)addr, 0);
+      res[i].FSC_FIELD_NAME(ai_canonname).cv = canonname;
+      if (i == n - 1) {
+        res[i].FSC_FIELD_NAME(ai_next).cv = ptrvalue_of_base_ofs(0, 0);
+      } else {
+        res[i].FSC_FIELD_NAME(ai_next).cv = ptrvalue_of_base_ofs((base_t)res, (i + 1) * sizeof (struct addrinfo));
+      }
+    }
+    return ptrvalue_of_base_ofs((base_t)res, 0);
+  }
+}
+
+/**
+ * @fn struct hostent *gethostbyaddr(const void *addr, socklen_t len, int type)
+ * @brief retrieve host information from network database.
+ * @param addr network address.
+ * @param len length of addr.
+ * @param type address family type.
+ * @return pointer to hostent found or null pointer on error.
+ *
+ * @crashcase illegal pointer, buffer overflow
+ * @fsctype struct(pointer)
+ *
+ * @author Lepidum Co., Ltd.
+ */
+fscw_pointer fscw_gethostbyaddr(fscw_pointer_param(addr),
+                                fscw_socklen_t_param(len),
+                                fscw_int_param(type))
+{
+  void *addr, *tmp;
+  struct hostent *hent;
+  
+  addr = wrapper_get_rawimage(addr_base, addr_ofs, &tmp, len, "gethostbyaddr");
+  hent = gethostbyaddr(addr, len, type);
+  wrapper_release_tmpbuf(tmp);
+  if (hent == NULL) {
+    return ptrvalue_of_base_ofs(0, 0);
+  } else {
+    return copy_hostent(hent);
+  }
+}
+
+/**
+ * @fn struct hostent *gethostbyname(const char *name);
+ * @brief look up network address database by host name.
+ * @param name host name to look up.
+ * @return pointer to hostent if found, or null pointer on error.
+ *
+ * @crashcase illegal pointer, non-terminated string
+ * @fsctype struct(pointer)
+ *
+ * @author Lepidum Co., Ltd.
+ */
+fscw_pointer fscw_gethostbyname(fscw_string_param(name))
+{
+  fscw_string_buf b = fscw_string_unwrap_param(name, "gethostbyname");
+  struct hostent *hent = gethostbyname(b.v);
+  fscw_string_release(b);
+
+  if (hent == NULL) {
+    return ptrvalue_of_base_ofs(0, 0);;
+  } else {
+    return copy_hostent(hent);
+  }
+}
+
+/**
+ * @fn struct netent *gethostent(void);
+ * @brief look up network address database
+ *
+ * @author Lepidum Co., Ltd.
+ */
+fscw_pointer fscw_gethostent(void)
+{
+  return copy_hostent(gethostent());
+}
+
+/**
+ * @fn struct netent *getnetbyaddr(uint32_t net, int type);
+ * @brief look up network address database by host name.
+ * @param net network number
+ * @param type address type
+ * @return pointer to hostent if found, or null pointer on error.
+ *
+ * @fsctype struct(pointer)
+ *
+ * @author Lepidum Co., Ltd.
+ */
+fscw_pointer fscw_getnetbyaddr(fscw_uint32_t_param(net), 
+                               fscw_int_param(type))
+{
+  struct netent *r = getnetbyaddr(net, type);
+  return copy_netent(r);
+}
+
+/**
+ * @fn struct netent *getnetbyname(const char *name);
+ * @brief look up network address database by host name.
+ *
+ * @author Lepidum Co., Ltd.
+ */
+fscw_pointer fscw_getnetbyname(fscw_string_param(name))
+{
+  fscw_string_buf b = fscw_string_unwrap_param(name, "getnetbyname");
+  struct netent *r = getnetbyname(b.v);
+  fscw_string_release(b);
+  return copy_netent(r);
+}
+
+/**
+ * @fn struct netent *getnetent(void);
+ * @brief look up network address database
+ *
+ * @author Lepidum Co., Ltd.
+ */
+fscw_pointer fscw_getnetent(void)
+{
+  return copy_netent(getnetent());
+}
+
+/**
+ * @fn struct protoent getprotobyname(const char *name);
+ * @brief look up network protocol database.
+ * @param name protocol name.
+ * @return pointer to protovent if found, or null pointer on error.
+ *
+ * @crashcase illegal pointer, non-terminated string.
+ * @fsctype struct(pointer)
+ *
+ * @author Lepidum Co., Ltd.
+ */
+fscw_pointer fscw_getprotobyname(fscw_string_param(name))
+{
+  fscw_string_buf b = fscw_string_unwrap_param(name, "getprotobyname");
+  struct protoent *r = getprotobyname(b.v);
+  fscw_string_release(b);
+  return copy_protoent(r);
+}
+
+/**
+ * @fn struct protoent getprotobynumber(int n);
+ * @brief look up network protocol database.
+ *
+ * @author Lepidum Co., Ltd.
+ */
+fscw_pointer fscw_getprotobynumber(fscw_int_param(n))
+{
+  return copy_protoent(getprotobynumber(n));
+}
+
+/**
+ * @fn struct protoent getprotoent(void);
+ * @brief look up network protocol database.
+ *
+ * @author Lepidum Co., Ltd.
+ */
+fscw_pointer fscw_getprotoent(void)
+{
+  return copy_protoent(getprotoent());
+}
+
+/**
+ * @fn struct servent getservbyname(const char *name, const char *proto);
+ * @brief look up network services database.
+ * @param name service name.
+ * @param proto protocol name.
+ * @return pointer to servent if found, or null pointer on error.
+ *
+ * @crashcase illegal pointer, non-terminated string.
+ * @fsctype struct(pointer)
+ *
+ * @author Lepidum Co., Ltd.
+ */
+fscw_pointer fscw_getservbyname(fscw_string_param(name), 
+                                fscw_string_param(proto))
+{
+  fscw_string_buf name_b  = fscw_string_unwrap_param(name,  "getservbyname");
+  fscw_string_buf proto_b = {0, 0};
+  struct servent *r;
+
+  if (!pointer_is_null(proto)) {
+    proto_b = fscw_string_unwrap_param(proto, "getservbyname");
+  }
+  r = getservbyname(name_b.v, proto_b.v);
+  fscw_string_release(name_b);
+  if (proto_b.v) {
+    fscw_string_release(proto_b);
+  }
+  return copy_servent(r);
+}
+
+/**
+ * @fn struct servent getservbyport(int port, const char *proto);
+ * @brief look up network services database.
+ *
+ * @author Lepidum Co., Ltd.
+ */
+fscw_pointer fscw_getservbyport(fscw_int_param(port), 
+                                fscw_string_param(proto))
+{
+  fscw_string_buf proto_b = {0, 0};
+  struct servent *r;
+  if (!pointer_is_null(proto)) {
+    proto_b = fscw_string_unwrap_param(proto, "getservbyport");
+  }
+  r = getservbyport(port, proto_b.v);
+  if (proto_b.v) {
+    fscw_string_release(proto_b);
+  }
+  return copy_servent(r);
+}
+
+/**
+ * @fn struct servent getservent(void)
+ * @brief look up network services database.
+ *
+ * @author Lepidum Co., Ltd.
+ */
+fscw_pointer fscw_getservent(void)
+{
+  return copy_servent(getservent());
+}
+
+
+/**
+ * @fn const char *gai_strerror(int err)
+ *
+ * @crashcase none
+ * @fsctype return_string
+ *
+ * @author Lepidum Co., Ltd.
+ */
+fscw_pointer fscw_gai_strerror(fscw_int_param(err))
+{
+  return fscw_string_wrap(gai_strerror(err));
+}
+
+/**
+ * @fn void freeaddrinfo(struct addrinfo *ai)
+ * @brief free addrinfo structure
+ * @param a structure to free
+ *
+ * @todo implementation
+ *
+ * @crashcase illegal pointer
+ * @fsctype struct(pointer)
+ *
+ * @author Lepidum Co., Ltd.
+ */
+void fscw_freeaddrinfo(fscw_pointer_param(p))
+{
+}
+
+/**
+ * @fn int getnameinfo(const struct sockaddr *sa, socklen_t salen, char *node, socklen_t nodelen, char *serv, socklen_t servlen, int flags)
+ * @brief get host name and service name from address.
+ * @param sa address.
+ * @param salen size of address.
+ * @param node host name is returned.
+ * @param nodelen size of node.
+ * @param serv service name is returned.
+ * @param servlen size of service.
+ * @param flags flag.
+ * @retval 0 success.
+ * @retval != 0 fail.
+ *
+ * @crashcase invalid pointer, buffer overflow
+ * @fsctype struct(atomic), string(wo)
+ *
+ * @author Lepidum Co., Ltd.
+ */
+fscw_int fscw_getnameinfo(fscw_pointer_param(sa),  fscw_socklen_t_param(salen),
+                          fscw_string_param(node), fscw_socklen_t_param(nodelen),
+                          fscw_string_param(serv), fscw_socklen_t_param(servlen),
+                          fscw_int_param(flags))
+{
+  void *t1 = NULL, *t2 = NULL, *t3 = NULL;
+  void *sa   = wrapper_get_rawimage(sa_base, sa_ofs, &t1, salen, "getnameinfo");
+  char *node = NULL;
+  char *serv = NULL;
+  int ret;
+  if (!pointer_is_null(node)) node = wrapper_get_read_buffer(node_base, node_ofs, &t2, nodelen, "getnameinfo");
+  if (!pointer_is_null(serv)) serv = wrapper_get_read_buffer(serv_base, serv_ofs, &t3, servlen, "getnameinfo");
+  ret = getnameinfo(sa, salen, node, nodelen, serv, servlen, flags);
+  wrapper_release_tmpbuf(t1);
+  if (ret == 0) {
+    if (node) wrapper_writeback_release_tmpbuf(node_base, node_ofs, t2, strlen(node));
+    if (serv) wrapper_writeback_release_tmpbuf(serv_base, serv_ofs, t3, strlen(serv));
+  } else {
+    if (node) wrapper_release_tmpbuf(t2);
+    if (serv) wrapper_release_tmpbuf(t3);
+  }
+  return value_of_int(ret);
+}
+
+/**
+ * @fn int getaddrinfo(const char *node, const char *serv, const struct addrinfo *hint, struct addrinfo **res)
+ * @brief get address information.
+ * @param node host name.
+ * @param serv service name.
+ * @param hint optional hint.
+ * @param res result.
+ * @retval 0 success.
+ * @retval !=0 fail.
+ *
+ * @crashcase invalid pointer, buffer overflow, non-terminated string
+ * @fsctype string(ro), struct(pointer)
+ *
+ * @author Lepidum Co., Ltd.
+ */
+fscw_int fscw_getaddrinfo(fscw_string_param(node), 
+                          fscw_string_param(serv), 
+                          fscw_pointer_param(hint), 
+                          fscw_pointer_param(res))
+{
+  fscw_string_buf node_b = { 0, 0 };
+  fscw_string_buf serv_b = { 0, 0 };
+  struct addrinfo *r;
+  int ret;
+
+  if (!pointer_is_null(node)) node_b = fscw_string_unwrap_param(node, "getaddrinfo");
+  if (!pointer_is_null(serv)) serv_b = fscw_string_unwrap_param(serv, "getaddrinfo");
+
+  if (!pointer_is_null(hint)) {
+    fscw_struct_stdlib_addrinfo fh = fscw_struct_stdlib_addrinfo_read_pointer_param(hint, 0);
+    struct addrinfo h;
+
+    h.ai_flags    = fscw_int_read_unwrap(fscw_int_member(&fh, ai_flags));
+    h.ai_family   = fscw_int_read_unwrap(fscw_int_member(&fh, ai_family));
+    h.ai_socktype = fscw_int_read_unwrap(fscw_int_member(&fh, ai_socktype));
+    h.ai_protocol = fscw_int_read_unwrap(fscw_int_member(&fh, ai_protocol));
+    h.ai_addrlen  = fscw_int_read_unwrap(fscw_int_member(&fh, ai_addrlen));
+    h.ai_addr = NULL;
+    h.ai_canonname = NULL;
+    h.ai_next = NULL;
+    
+    ret = getaddrinfo(node_b.v, serv_b.v, &h, &r);
+  } else {
+    ret = getaddrinfo(node_b.v, serv_b.v, NULL, &r);
+  }
+  if (node_b.v) fscw_string_release(node_b);
+  if (serv_b.v) fscw_string_release(serv_b);
+
+  if (ret == 0) {
+    fscw_pointer res_ptr = copy_addrinfo(r);
+    freeaddrinfo(r);
+    fscw_pointer_write_pointer_param(res, 0, res_ptr);
+  }
+  return fscw_int_wrap(ret);
+}

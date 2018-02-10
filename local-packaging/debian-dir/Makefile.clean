@@ -1,0 +1,11 @@
+# -*- makefile -*-
+
+all:
+	-echo 'To build debian package, please read README.local-packaging in the top directory.'
+	-false
+
+distclean-sub:
+	rm -rf failsafec failsafec.substvars copyright files changelog ../debian-build-dir
+
+distclean-sub-top:
+	rm -rf build-arch-stamp configure-stamp

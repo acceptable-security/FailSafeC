@@ -1,0 +1,84 @@
+/* -*- C -*- */
+
+%% C-PROLOGUE
+#include <grp.h>
+
+%% FSC-PROLOGUE
+#include <grp.h>
+
+%% REQUIRED-DECLS
+struct stdlib_group;
+typedef gid_t;
+
+require_function getgrgid;
+require_function getgrnam;
+require_function getgrent;
+
+auto_generate endgrent;
+auto_generate setgrent;
+
+%% NATIVE-IMPLEMENTATION
+
+#include <wrapper/fscw_helper.h>
+
+static void wrap_group(fscw_struct_stdlib_group *dst, struct group *src)
+{
+  fscw_string_wrap_write(fscw_string_member(dst, gr_name), src->gr_name);
+  fscw_gid_t_wrap_write(fscw_gid_t_member(dst, gr_gid), src->gr_gid);
+  fscw_pointer_write(fscw_pointer_member(dst, gr_mem), fscw_string_array_wrap((const char *const *)src->gr_mem));
+}
+
+/**
+ * @fn struct group *getgrgid(gid_t gid)
+ *
+ * @author Lepidum Co., Ltd.
+ */
+fscw_pointer fscw_getgrgid(fscw_gid_t_param(gid))
+{
+  struct group *g = getgrgid(gid);
+  if (g == NULL) {
+    return fscw_pointer_wrap(NULL);
+  } else {
+    fscw_struct_stdlib_group *ret = fscw_struct_stdlib_group_alloc(1);
+    wrap_group(ret, g);
+    return fscw_pointer_wrap(ret);
+  }
+}
+
+/**
+ * @fn struct group *getgrnam(const char *name)
+ *
+ * @author Lepidum Co., Ltd.
+ */
+fscw_pointer fscw_getgrnam(fscw_string_param(name))
+{
+  fscw_string_buf buf = fscw_string_unwrap_param(name, "getgrnam");
+  struct group *g = getgrnam(buf.v);
+  fscw_string_release(buf);
+  
+  if (g == NULL) {
+    return fscw_pointer_wrap(NULL);
+  } else {
+    fscw_struct_stdlib_group *ret = fscw_struct_stdlib_group_alloc(1);
+    wrap_group(ret, g);
+    return fscw_pointer_wrap(ret);
+  }
+}
+
+/**
+ * @fn struct group *getgrent(void)
+ *
+ * @author Lepidum Co., Ltd.
+ */
+fscw_pointer fscw_getgrent(void)
+{
+  struct group *g = getgrent();
+  if (g == NULL) {
+    return fscw_pointer_wrap(NULL);
+  } else {
+    fscw_struct_stdlib_group *ret = fscw_struct_stdlib_group_alloc(1);
+    wrap_group(ret, g);
+    return fscw_pointer_wrap(ret);
+  }
+}
+

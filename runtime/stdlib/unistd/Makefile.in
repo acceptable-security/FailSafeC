@@ -1,0 +1,15 @@
+srcdir = @srcdir@
+builddir = @builddir@
+top_srcdir = @top_srcdir@
+top_builddir = @top_builddir@
+
+LIB_NAME = ../fsc_stdlib
+OBJ_NAMES = access \
+	readlink getwd gethostname \
+	chroot getdtablesize chdir \
+	symlink unlink
+INCLUDE =
+FSCCOPTION = 
+
+all: opt debug
+include $(top_builddir)/Makefile.runtime.rules

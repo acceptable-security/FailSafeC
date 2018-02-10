@@ -1,0 +1,83 @@
+/* -*- C -*- */
+
+%% C-PROLOGUE
+#include <net/if.h>
+
+%% FSC-PROLOGUE
+#include <net/if.h>
+
+%% REQUIRED-DECLS
+struct stdlib_if_nameindex;
+require_function if_indextoname;
+require_function if_nameindex;
+require_function if_freenameindex;
+
+%% NATIVE-IMPLEMENTATION
+#include <string.h>
+
+/**
+ * @fn char *if_indextoname(unsigned ifindex, char *ifname)
+ * @brief map interface index to name
+ *
+ * @author Lepidum Co., Ltd.
+ */
+fscw_pointer fscw_if_indextoname(fscw_unsigned_int_param(ifindex),
+                                 fscw_pointer_param(ifname))
+{
+  char *s;
+  void *t;
+  char *ret;
+  s = wrapper_get_read_buffer(ifname_base, ifname_ofs, &t,
+  	IF_NAMESIZE, "if_indextoname");
+  ret = if_indextoname(ifindex, s);
+  if (ret) {
+    wrapper_writeback_release_tmpbuf(ifname_base, ifname_ofs, t, strlen(s) + 1);
+    return ptrvalue_of_base_ofs(ifname_base, ifname_ofs);
+  }
+  wrapper_release_tmpbuf(t);
+  return fscw_pointer_wrap(NULL);
+}
+
+/**
+ * @fn struct if_nameindex *if_nameindex(void)
+ * @brief return an array of structure that contains interface index and name
+ *
+ * @author Lepidum Co., Ltd.
+ */
+fscw_pointer fscw_if_nameindex(void)
+{
+  int i, n;
+  struct if_nameindex *r;
+  fscw_struct_stdlib_if_nameindex *ret;
+
+  r = if_nameindex();
+  if (r == NULL) {
+    return fscw_pointer_wrap(NULL);
+  }
+
+  for (n = 0; r[n].if_index != 0; ++n)
+    ;
+  ret = fscw_struct_stdlib_if_nameindex_alloc(n+1);
+  for (i = 0; i < n; ++i) {
+    fscw_unsigned_int_wrap_write(fscw_unsigned_int_member(&ret[i], if_index), r[i].if_index);
+    fscw_string_wrap_write(fscw_pointer_member(&ret[i], if_name), r[i].if_name);
+  }
+  fscw_unsigned_int_wrap_write(fscw_unsigned_int_member(&ret[n], if_index), 0);
+  fscw_pointer_wrap_write(fscw_pointer_member(&ret[n], if_name), NULL);
+
+  if_freenameindex(r);
+
+  return fscw_pointer_wrap(ret);
+}
+
+/**
+ * @fn void if_freenameindex(struct if_nameindex *ptr)
+ * @brief free memory allocated by if_nameindex()
+ *
+ * @todo implementation
+ *
+ * @author Lepidum Co., Ltd.
+ */
+void fscw_if_freenameindex(fscw_pointer_param(ptr))
+{
+}

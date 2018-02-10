@@ -1,0 +1,26 @@
+srcdir = @srcdir@
+builddir = @builddir@
+top_srcdir = @top_srcdir@
+top_builddir = @top_builddir@
+
+LIB_NAME = ../fsc_stdlib
+FSCW_OBJ_NAMES = \
+	fcntl_creat unistd stdlib mktemp pwd grp sys_socket sys_stat \
+	arpa_inet termios netdb fnmatch sys_time sys_times time \
+	sys_statvfs sys_resource poll glob netinet_in shadow \
+	libgen math_2 fscw_helper stdio iconv nl_types inttypes wait_2 \
+	ulimit utime signal_3 string_3 regex langinfo if_2 env_helper sys_file \
+	locale_2 sys_select crypt mman
+#	structs # obsolete: not needed for the new FSC linker
+
+INCLUDE = 
+
+all: fscw.manifest opt debug
+include $(top_builddir)/Makefile.runtime.rules
+FSCCOPTION = -fmulti-module
+
+fscw.manifest: $(FSCW_OBJ_NAMES:%=%.safe.c)
+	sed -n '/^\/\* manifest entry/{n;p;}' $^ | sort | uniq >$@
+
+clean::
+	rm -f $(FSCW_OBJ_NAMES:%=%.safe.c) fscw.manifest

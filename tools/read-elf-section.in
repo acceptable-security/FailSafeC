@@ -1,0 +1,118 @@
+#!/usr/bin/perl
+# -*- perl -*-
+$path = $0;
+$path =~ s@/[^/]+$@@ or die 'cannot detect compiler path';
+
+use constant ARCHIVE_START => 1;
+use constant FILE_START => 2;
+use constant BODY_WAIT => 3;
+use constant BODY_DONE => 4;
+use constant ERROR => 0;
+
+use IO::Handle;
+use Getopt::Long qw(:config bundling);
+
+$section = '';
+$multifile = 0;
+$optional = 0;
+$was_archive = 0;
+
+GetOptions ('section|S=s' => \$section,
+	    'multi-file|M' => \$multifile,
+	    'optional' => \$optional) or exit(1);
+
+die "no section specified\n" unless $section;
+die "no file specified\n" unless defined $ARGV[0];
+
+$ENV{'LANG'} = 'C';
+$ENV{'LC_MESSAGES'} = 'C';
+
+open(OBJDUMP, '-|') || exec '@OBJDUMP@', '-j', $section, '-s', '--', $ARGV[0];
+
+$contents_found = 0;
+$empty_found = 0;
+
+binmode STDOUT;
+$currentfile = '';
+
+$state = ($multifile ? ARCHIVE_START : FILE_START);
+
+while(defined ($_ = <OBJDUMP>)) {
+    chomp;
+#    printf STDERR "\t\t%2d (%2d, %2d) <<%s>>\n", $state, $contents_found, $empty_found, $_;
+    if (/^In archive (.+):/) {
+	if ($multifile) {
+	    die "malformed output from objdump (1)" unless OBJDUMP->input_line_number == 1;
+	    die "malformed output from objdump (1b)" unless $state == ARCHIVE_START;
+	    die "file name do not match: why?" if ($ARGV[0] ne $1);
+	    printf "archive-name:%d\n%s\n", length $1, $1;
+	    $was_archive = 1;
+	    $state = FILE_START;
+	} else {
+	    die "cannot handle this input without -M:: is this an archive?";
+	}
+	next;
+    }
+    if (/^(.+):     file format [a-z0-9-]+$/) {
+	$currentfile = $1;
+	if ($multifile) {
+	    if ($state == FILE_START) {
+		# OK
+	    } elsif ($state == BODY_WAIT) {
+		$empty_found++;
+	    } elsif ($state == BODY_DONE) {
+		# OK
+	    } elsif ($state == ARCHIVE_START) {
+		$was_archive = 0; # passed file was not archive!
+		die "file name does not match: is this an archive?" if ($ARGV[0] ne $currentfile);
+	    } else {
+		die "malformed output from objdump (2)";
+	    }
+	    printf "file-name:%d\n%s\n", length $currentfile, $currentfile;
+	} else {
+	    die "malformed output from objdump (2)" unless $state == FILE_START;
+	    die "file name does not match: is this an archive?" if ($ARGV[0] ne $currentfile);
+	}
+	$state = BODY_WAIT;
+	next;
+    }
+    if (/^Contents of section \Q$section\E:$/) {
+	die "more than one $section found.\n" if $state == BODY_DONE;
+	die "malformed output from objdump (3)" if $state != BODY_WAIT;
+	die "malformed output from objdump" if $currentfile eq "";
+	$contents = '';
+	while ($_ = <OBJDUMP>) {
+	    last unless /^ *[0-9a-f]+ ([0-9a-f ]{35})  .{16}$/;
+	    $_ = $1;
+	    s/ +//g;
+	    $contents .= pack("H*", $_);
+	}
+	if ($multifile) {
+	    printf "section:%d\n%s\ncontents:%d\n%s\n", length $section, $section, length $contents, $contents;
+	} else {
+	    print $contents;
+	}
+	$contents_found++;
+	$state = BODY_DONE;
+	last if not defined $_;
+	redo;
+    }
+}
+
+if ($state == BODY_DONE) {
+    # OK
+} elsif ($state == BODY_WAIT) {
+    $empty_found++;
+} elsif ($state == FILE_START) {
+    die "malformed output from objdump: is input empty?)";
+} else {
+    die "malformed output from objdump (4)";
+}
+    
+#printf STDERR "%d contents, %d empty found.\n", $contents_found, $empty_found;
+
+unless ($optional ? ($contents_found + $empty_found) : ($contents_found)) {
+    die "input file contains $empty_found files which lack elf section" if $multifile;
+    die "input file lacks elf section";
+}
+exit(0);

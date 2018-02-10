@@ -1,0 +1,157 @@
+.\"   Part of Fail-Safe C Compiler. Produced by Yutaka Oiwa.
+.\"   (c) 2001-2005 Yutaka Oiwa.
+.\"   (c) 2005-2008 AIST.
+.\"
+.\"   This file is written by Yutaka Oiwa in 2008.
+.TH FSCC 1 2008-06-05 "Fail-Safe C" "Fail-Safe C User's Manual"
+.SH NAME
+fscc \- Fail-Safe C compiler driver
+.SH SYNOPSIS
+.B fscc
+[\fIoptions\fR | \fIfiles\fR] ...
+.SH DESCRIPTION
+.B FSCC
+compiles C program files into object files or an executive file using Fail-Safe C compiler system.
+The executives compiled by this compiler is protected against memory access errors.
+.PP
+The command line syntax is similar to usual Unix C compilers.
+For example, the command
+.RS
+.sp
+fscc \-o hello hello.c
+.sp
+.RE
+compiles the source file \(lqhello.c\(rq and output the executable file to the file \(lqhello\(rq.
+.PP
+If your project has multiple file, you can use compiler and linker separately, like
+.RS
+.sp
+fscc \-c main.c
+.br
+fscc \-c libmine.c
+.br
+fscc \-o myprogram main.o libmine.o
+.sp
+.RE
+To use Fail-Safe C compiler system, all source files and libraries must be compiled and linked by
+.B fscc\fR.
+
+.SH OPTIONS
+Current driver and compiler understands the following standard options.
+.TP 14
+.B \-o
+Specify the name of the final output file.
+.TP
+.B \-c
+Stop processing after Fail-Safe C compilation:
+no linking.
+.TP
+.B \-S
+Stop processing after compilation and generates assembly code:
+no binary translation, no linking.
+.TP
+.B \-E
+Stop processing after preprocessor:
+no compilation, no linking.
+.TP
+.BI \-I dir
+Add the directory \fIdir\fR to the search path of the include files.
+.TP
+.BI \-L dir
+Add the directory \fIdir\fR to the search path of the library files.
+.TP
+.BI \-l file
+Add the library file
+lib\fIfile\fR.a
+in the library search path to be linked.
+.TP
+.BI \-O [level]
+Specify optimization level for backend native code compiler.  In Fail-Safe C, 
+the highest optimization level is the default when neither
+.B \-g
+option nor
+.B \-O
+option with an explicit optimization level is given;
+.B \-O2
+will
+.I reduce
+the optimization level in most architectures. The
+.B \-g
+option will be ignored when any
+.BI \-O [level]
+option is given (except for \fB\-O0\fR).
+.TP
+.B \-g
+Generating debugging code.  
+It emit very slow executive, but
+several debugging/assertion features are enabled.
+Native code optimization is also omitted.
+Note: if
+.B \-g
+is used for compilation, it is also needed for linking.
+.TP
+.BI \-D symbol
+Define
+.I symbol
+for the preprocessor.
+.TP
+.BI \-U symbol
+Undefine 
+.I symbol
+for the preprocessor.
+.TP
+.BI \-x type
+Specify the type of the input files specified after this option.  The option
+.B \-xc
+might be useful when an input C file does not have an extension \(lq.c\(rq.
+.PP
+In addition to above, the compiler also accepts the following non-standard options.
+.TP 14
+.B \-\-safec\-only
+Stop process after Fail-Safe C processing.  Backend
+native code generation is not performed.  Output file extension
+will be \(lq.safe.c\(rq.
+.TP
+.B \-\-save\-temps
+Keep all intermediate files (such as *.o, *.safe.c) in the current directory.
+Normally, these files are generated in a temporary directory and erased after use.
+It is useful if you want to use native debuggers to trace program behavior.
+.TP
+.B \-Wc,\fIopts\fR
+Pass options \fIopts\fR (comma-separated) to the backend native code generator (gcc).
+.TP
+.B \-Wl,\fIopts\fR
+Pass options \fIopts\fR to the backend linker.  Useful if you need to link additional/alternative native libraries.
+.TP
+.B \-f\fIopts\fR
+Specify Fail-Safe C specific configuration options for compilers.
+.TP
+.B \-\-help
+Show all command-line options (including \fB\-f\fR options).
+.SH TIPS
+Current version of the Fail-Safe C Compiler supports basic use of
+.SM GNU AUTOCONF\fR.
+However, due to dirty tricks used by
+.SM AUTOCONF
+it needs special workaround.
+Usually, invoking the configure with the following options may work:
+.RS
+.sp
+  env CC=/path/to/fscc CFLAGS=\(aq\-fgnu\-autoconf\-workaround\(aq \\
+.br
+      ./configure \-\-build=i386\-linux
+.RE
+.SH FILES
+.I /usr/local/lib/fsc/*
+.SH AUTHORS
+\(en Yutaka Oiwa.
+.SH COPYRIGHT
+Copyright \(co 2001-2005 Yutaka Oiwa.
+.br
+Copyright \(co 2005- National Institute of Advanced Industrial Science and Technology (AIST).
+.br
+Copyright \(co 2006-2007 Lepidum, Inc. (part of the standard library).
+.PP
+See the file
+.I LICENSE
+for more information.

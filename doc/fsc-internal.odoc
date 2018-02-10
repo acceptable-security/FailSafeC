@@ -1,0 +1,137 @@
+{1 Fail-Safe C Internal Structure}
+
+This document describes internal structure of Fail-Safe C compiler.
+
+{2:chap_compiler 1. Internal processing of the compiler}
+
+The translation in Fail-Safe C compiler is implemented as many consecutive stages of translation between syntax trees or instruction types. The following is the list in which order translations are performed.  The [--stop-at] option in the compiler can be used to extract intermediate representation on various stages, as marked below.
+
+C source code
+
+  {ul {- using C preprocessor}}
+
+preprocessed C source code ({i --stop-at preprocessor})
+
+  - {!C_lexer}
+  - {!C_parser}
+
+Ptree ({!C_abstree}): Untyped C abstract syntax tree ({i --stop-at parser})
+
+  {ul {- {!C_typing}}}
+
+CTT  ({!Ctt_abstree}): Typed C abstract syntax tree ({i --stop-at typing, --stop-at typing-pp})
+
+  - {!Expunge_localstatic}
+  - {!Ctt_pad_structures}
+  - {!Ctt_reduce_mdarray}
+  - {!Ctt_reduce_unions}
+  - {!Ctt_add_tentative_initializer}
+  - {!Ctt_remove_unuseddecls}
+
+CTT ({!Ctt_abstree}): Filtered typed C abstract syntax tree ({i --stop-at typing2})
+
+  {ul {- {!Cttm_expunge_assignment}}}
+
+{!Cttm_abstree}: Typed C abstract syntax tree with explicit pointer-indirect operations.
+
+Up to this point, side-effect non-determinism is represented as trees of operators.
+
+  {ul {- {!Separate_side_effect}}}
+
+IL0 ({!Il0}): A intermediate language with simple instructions and Gotos. Non-determinism is represented by parallel-execution primitive.
+
+  - {!Il0_translate_bitfield}
+  - {!Il0_type_canonify}
+
+IL0 ({!Il0})  ({i --stop-at il0})
+
+  - {!Flatten_statement}
+
+IL1 ({!Il1}): IL0 divided to basic blocks.
+
+  - {!Classify_local}
+
+IL2 ({!Il2}): IL1 with an information on local variable liveness. ({i --stop-at il2,  --stop-at classify-local})
+
+  - {!Il2_reduce_local_variable}
+
+IL2 ({!Il2}): Reduce possible local variables to temporary variables. ({i --stop-at il2reduce})
+
+  - {!Separate_fatpointer}
+
+ILS ({!Ils}) : separate fat pointers into two variables.  ({i --stop-at ils})
+
+  - {!Ils_ssa_translate}
+
+ILS: SSA transformed.  ({i --stop-at new-ssa})
+
+  - ({!Dummy_analyzer}): value range analysis. not implemented.
+  - {!Ils_basetype_analysis}: polymorphic pointer type analysis.
+
+ILR: ILS with program analysis information.
+
+  - {!Insert_check}
+
+ILC: ILR with bounds-check condition appended.  ({i --stop-at ilc})
+
+  - {!Translate_to_il3}
+  - {!Il3_fixup}
+
+IL3: Intermediate code for translated codes with checks explicitly inserted  ({i --stop-at il3})
+
+  - {!Il3_optimize}
+
+IL3: (IL3B) IL3 with reduce redundant codes and variables.  ({i --stop-at il3opt})
+
+  - {!Il3_decompose_ssa}
+  - {!Il3_to_ctt}
+    {ul {- {!Cttm_to_ctt}}}
+
+CTT: Converted back to typed abstract syntax tree.  ({i --stop-at translated})
+
+  - {!Ctt_to_ptree}
+
+C_abstree: Converted back to untyped abstract syntax tree. ({i --stop-at code-gen})
+
+  - {!Add_support_funcs}
+
+C_abstree: Added all additional stubs and helpers.
+
+  - {!C_pp}
+
+C source code
+
+{2:chap_linker 1. Internal processing of the linker}
+
+ - {!Collect_modules} {ul {- {!Parse_typeinfo}}}
+ - {!Resolve}
+ - {!Generate_link_stubs}
+ - {!Generate_ldscript}
+
+{2:chap_list 2. List of modules}
+
+{3 Modules in common directory}
+
+The [common] directory contains modules which can be used independently from Fail-Safe C.
+
+{!modules: Big_int_infix Debug Glist Int_set Option Topological_sort Util}
+
+{3 Modules in parser directory}
+
+{!modules: C_abstree C_lexer C_parser C_parserhelper C_pp C_typing Classify_local Ctt_abstree Ctt_add_tentative_initializer Ctt_pad_structures Ctt_printer Ctt_reduce_mdarray Ctt_reduce_unions Ctt_remove_unuseddecls Ctt_to_ptree Ctt_visitor Cttm_abstree Cttm_expunge_assignment Cttm_to_ctt Expunge_localstatic Flatten_statement Fsc_config Il Il0 Il0_translate_bitfield Il0_type_canonify Il1 Il2 Il2_add_block_to_top Il2_printer Il2_reduce_local_variable Locterm Native_int_semantics Parse_const Reduce Separate_side_effect Update_struct_types}
+
+{3 Modules in trans directory}
+
+{!modules: Add_support_funcs Dummy_analyzer Il3 Il3_constants Il3_decompose_ssa Il3_fixup Il3_formatter Il3_optimize Il3_to_ctt Il3_visitor Il_formatter Ilc Ilc_formatter Ils Ils_basetype_analysis Ils_formatter Ils_ssa_translate Insert_check Install_fsc_extension Record_globalnames Separate_fatpointer Trans_main Transutil}
+
+{3 Modules in linker directory}
+
+{!modules: Collect_modules Generate_ldscript Generate_link_stubs Linker_main Linker_types Parse_typeinfo Resolve}
+
+{3 Obsolete or debugging modules}
+
+{!modules: Set_list Parser_loadup Trans_loadup}
+
+{2:chap_index Indexes}
+
+{!indexlist}

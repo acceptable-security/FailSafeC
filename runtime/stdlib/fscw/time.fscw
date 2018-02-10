@@ -1,0 +1,376 @@
+/* -*- C -*- */
+
+%% C-PROLOGUE
+#define _XOPEN_SOURCE 600
+#include <time.h>
+#include <sys/time.h>
+
+%% FSC-PROLOGUE
+#include <time.h>
+#include <sys/time.h>
+
+extern void __stdlib_set_timezone(long tz, int dl, char *tz1, char *tz2);
+
+%% REQUIRED-DECLS
+typedef size_t;
+typedef time_t;
+typedef clock_t;
+struct stdlib_tm;
+require_function asctime;
+require_function localtime;
+require_function ctime;
+require_function time;
+require_function getdate;
+require_function mktime;
+require_function strftime;
+require_function strptime;
+require_function tzset;
+require_function gmtime;
+require_function gmtime_r;
+require_function gettimeofday;
+
+require_external_function __stdlib_set_timezone;
+
+auto_generate difftime;
+auto_generate clock;
+
+%% NATIVE-IMPLEMENTATION
+
+#include <wrapper/fscw_helper.h>
+#include <stdlib/env_helper.h>
+
+static int tzset_called = 0;
+
+#define TZ_INIT if (!tzset_called) (fscw_tzset())
+
+/**
+ * @fn time_t time(time_t *t)
+ * @author Yutaka Oiwa.
+ */
+fscw_time_t fscw_time(fscw_pointer_param(t)){
+  time_t r = time(0);
+
+  if( fscw_is_not_null(t) ){
+    fscw_time_t_write_pointer_param(t, 0, fscw_time_t_wrap(r));
+  }
+  return fscw_time_t_wrap(r);
+}
+
+static void fscw_struct_stdlib_tm_wrap(fscw_struct_stdlib_tm *dst,  const struct tm *p)
+{
+  fscw_int_wrap_write(fscw_int_member(dst, tm_sec),   p->tm_sec);
+  fscw_int_wrap_write(fscw_int_member(dst, tm_min),   p->tm_min);
+  fscw_int_wrap_write(fscw_int_member(dst, tm_hour),  p->tm_hour);
+  fscw_int_wrap_write(fscw_int_member(dst, tm_mday),  p->tm_mday);
+  fscw_int_wrap_write(fscw_int_member(dst, tm_mon),   p->tm_mon);
+  fscw_int_wrap_write(fscw_int_member(dst, tm_year),  p->tm_year);
+  fscw_int_wrap_write(fscw_int_member(dst, tm_wday),  p->tm_wday);
+  fscw_int_wrap_write(fscw_int_member(dst, tm_yday),  p->tm_yday);
+  fscw_int_wrap_write(fscw_int_member(dst, tm_isdst), p->tm_isdst);
+}
+
+static void fscw_struct_stdlib_tm_unwrap(struct tm *dst, fscw_struct_stdlib_tm *src)
+{
+  dst->tm_sec   = fscw_int_read(fscw_int_member(src, tm_sec));
+  dst->tm_min   = fscw_int_read(fscw_int_member(src, tm_min));
+  dst->tm_hour  = fscw_int_read(fscw_int_member(src, tm_hour));
+  dst->tm_mday  = fscw_int_read(fscw_int_member(src, tm_mday));
+  dst->tm_mon   = fscw_int_read(fscw_int_member(src, tm_mon));
+  dst->tm_year  = fscw_int_read(fscw_int_member(src, tm_year));
+  dst->tm_wday  = fscw_int_read(fscw_int_member(src, tm_wday));
+  dst->tm_yday  = fscw_int_read(fscw_int_member(src, tm_yday));
+  dst->tm_isdst = fscw_int_read(fscw_int_member(src, tm_isdst));
+}
+
+/**
+ * @fn struct tm *localtime(const time_t *t)
+ * @author Yutaka Oiwa.
+ */
+fscw_pointer fscw_localtime(fscw_pointer_param(time))
+{
+  time_t t;
+  fscw_struct_stdlib_tm *ret;
+  struct tm *lt;
+
+  fscw_ensure_nonnull(time, "fscw_stdlib_localtime");
+
+  t = fscw_time_t_unwrap(fscw_time_t_read_pointer_param(time, 0));
+
+  TZ_INIT;
+
+  lt = localtime(&t);
+
+  ret = fscw_struct_stdlib_tm_alloc(1);
+  fscw_struct_stdlib_tm_wrap(ret, lt);
+  
+  return fscw_pointer_wrap(ret);
+}
+
+/**
+ * @fn char *asctime(const struct tm *t)
+ * @author Yutaka Oiwa.
+ */
+fscw_string fscw_asctime(fscw_pointer_param(tm_p))
+{
+  fscw_struct_stdlib_tm tmbuf;
+  struct tm tm_n = {0};
+
+  tmbuf = fscw_struct_stdlib_tm_read_pointer_param(tm_p, 0);
+  fscw_struct_stdlib_tm_unwrap(&tm_n, &tmbuf);
+  
+  return fscw_string_wrap(asctime(&tm_n));
+}
+
+/**
+ * @fn char *ctime(const time_t *t)
+ * @author Yutaka Oiwa.
+ */
+ptrvalue FS_FPi_Pc_ctime(base_t base0, ofs_t ofs) {
+    time_t t = int_of_value(read_word(base0, ofs));
+
+    TZ_INIT;
+    return wrapper_make_new_static_string(ctime(&t));
+}
+
+/**
+ * @fn struct tm *gmtime(const time_t *time)
+ * @brief convert time_t value to struct tm UTC time.
+ * @param time time to convert.
+ * @retval !=NULL pointer to struct tm.
+ * @retval NULL error occured.
+ *
+ * @crashcase illegal pointer, buffer overflow
+ * @fsctype pointer(atomic, ro), struct(atomic+)
+ *
+ * @author Lepidum Co., Ltd.
+ */
+fscw_pointer fscw_gmtime(fscw_pointer_param(time))
+{
+  time_t t;
+  fscw_struct_stdlib_tm *ret;
+  struct tm *gmt;
+
+  fscw_ensure_nonnull(time, "fscw_stdlib_gmtime");
+
+  t = fscw_time_t_unwrap(fscw_time_t_read_pointer_param(time, 0));
+
+  TZ_INIT;
+
+  gmt = gmtime(&t);
+
+  ret = fscw_struct_stdlib_tm_alloc(1);
+  fscw_struct_stdlib_tm_wrap(ret, gmt);
+  
+  return fscw_pointer_wrap(ret);
+}
+
+/**
+ * @fn struct tm *gmtime_r(const time_t *time, struct tm *result)
+ * @brief convert time_t value to struct tm UTC time.
+ * @param time time to convert.
+ * @param result pointer to struct tm where result stored.
+ * @retval result pointer to struct tm.
+ * @retval NULL error occured.
+ *
+ * @crashcase illegal pointer, buffer overflow
+ * @fsctype pointer(atomic, ro), struct(atomic+)
+ *
+ * @author Lepidum Co., Ltd.
+ */
+fscw_pointer fscw_gmtime_r(fscw_pointer_param(time),
+                           fscw_pointer_param(result))
+{
+  time_t t = fscw_time_t_unwrap(fscw_time_t_read_pointer_param(time, 0));
+  struct tm gt;
+
+  TZ_INIT;
+  if(gmtime_r(&t, &gt)){
+    fscw_struct_stdlib_tm fgt;
+    fscw_struct_stdlib_tm_wrap(&fgt, &gt);
+    fscw_struct_stdlib_tm_write_pointer_param(result, 0, fgt);
+    return ptrvalue_of_base_ofs(result_base, result_ofs);
+  }else{
+    return ptrvalue_of_base_ofs(0, 0);
+  }
+}
+
+/**
+ * @fn size_t strftime(char *str, size_t len, const char *fmt, const struct tm *t);
+ * @brief format time.
+ * @param str destination buffer.
+ * @param len buffer length.
+ * @param fmt format string.
+ * @param t time.
+ * @retval >0 success, length of string returned.
+ * @retval 0  fail.
+ *
+ * @crashcase invalid pointer, buffer overflow, non-terminated string
+ * @fsctype string(rw), struct(atomic)
+ *
+ * @author Lepidum Co., Ltd.
+ */
+fscw_size_t fscw_strftime(fscw_pointer_param(str),
+                          fscw_size_t_param(len),
+                          fscw_string_param(fmt),
+                          fscw_pointer_param(tm))
+{
+  fscw_string_buf fmt_b = fscw_string_unwrap_param(fmt, "strftime");
+  fscw_struct_stdlib_tm tmbuf;
+  struct tm tm_n = {0};
+  void *t1;
+  char *str = wrapper_get_read_buffer(str_base, str_ofs, &t1, len, "strftime");
+  
+  tmbuf = fscw_struct_stdlib_tm_read_pointer_param(tm, 0);
+  fscw_struct_stdlib_tm_unwrap(&tm_n, &tmbuf);
+
+  size_t ret;
+
+  TZ_INIT;
+  ret = strftime(str, len, fmt_b.v, &tm_n);
+  fscw_string_release(fmt_b);
+  if (ret != 0) {
+    wrapper_writeback_release_tmpbuf(str_base, str_ofs, t1, ret + 1);
+  } else {
+    wrapper_release_tmpbuf(t1);
+  }
+  return fscw_size_t_wrap(ret);
+}
+
+/**
+ * @fn int gettimeofday(struct timeval *t, void *tz)
+ * @brief get current time.
+ * @param t current time is returned.
+ * @param tz obsolete parameter.
+ * @return 0
+ *
+ * @crashcase invalid pointer, buffer overflow
+ * @fsctype struct(atomic)
+ *
+ * @author Lepidum Co., Ltd.
+ */
+value FS_FPSn21stdlib_select_timeval_Pv_i_gettimeofday(base_t t_b,  ofs_t t_o,
+                                                       base_t tz_b, ofs_t tz_o)
+{
+  void *t1;
+  struct timeval *t = wrapper_get_read_buffer(t_b, t_o, &t1, sizeof(struct timeval), "gettimeofday");
+  int ret;
+
+  TZ_INIT;
+  ret = gettimeofday(t, NULL);
+  wrapper_writeback_release_tmpbuf(t_b, t_o, t1, sizeof(struct timeval));
+  return value_of_int(ret);
+}
+
+/**
+ * @fn void tzset(void)
+ * @brief set timezone information.
+ *
+ * @crashcase none
+ * @fsctype special
+ *
+ * @author Lepidum Co., Ltd.
+ */
+void fscw_tzset(void)
+{
+  fscw_string tz1, tz2;
+
+  fsc_set_system_env("TZ");
+  tzset();
+  tz1 = tzname[0]? fscw_string_wrap(tzname[0]): fscw_pointer_wrap(NULL);
+  tz2 = tzname[1]? fscw_string_wrap(tzname[1]): fscw_pointer_wrap(NULL);
+  fscw___stdlib_set_timezone(0, timezone,
+                             0, daylight,
+                             base_of_ptrvalue(tz1), ofs_of_ptrvalue(tz1),
+                             base_of_ptrvalue(tz2), ofs_of_ptrvalue(tz2));
+  
+  tzset_called = 1;
+}
+
+/**
+ * @fn struct tm *getdate(const char *s)
+ * @brief set timezone information.
+ *
+ * @crashcase TBD
+ * @fsctype TBD
+ *
+ * @author Lepidum Co., Ltd.
+ */
+fscw_pointer fscw_getdate(fscw_pointer_param(s))
+{
+  fscw_string_buf buf;
+  struct tm *r;
+
+  fscw_ensure_nonnull(s, "fscw_getdate");
+  buf = fscw_string_unwrap_param(s, "getdate");
+  r = getdate(buf.v);
+  fscw_string_release(buf);
+  if (r) {
+    fscw_struct_stdlib_tm *ret = fscw_struct_stdlib_tm_alloc(1);
+    
+    fscw_struct_stdlib_tm_wrap(ret, r);
+    return fscw_pointer_wrap(ret);
+  } else {
+    return fscw_pointer_wrap(NULL);
+  }
+}
+
+/**
+ * @fn time_t mktime(struct tm *t)
+ * @brief convert time
+ *
+ * @crashcase TBD
+ * @fsctype TBD
+ *
+ * @author Lepidum Co., Ltd.
+ */
+fscw_time_t fscw_mktime(fscw_pointer_param(t))
+{
+  fscw_struct_stdlib_tm tmbuf;
+  struct tm tm_n = {0};
+  time_t ret;
+
+  tmbuf = fscw_struct_stdlib_tm_read_pointer_param(t, 0);
+  fscw_struct_stdlib_tm_unwrap(&tm_n, &tmbuf);
+
+  ret = mktime(&tm_n);
+  if (ret == (time_t)-1)
+    return fscw_time_t_wrap(ret);
+
+  fscw_struct_stdlib_tm_wrap(&tmbuf, &tm_n);
+  fscw_struct_stdlib_tm_write_pointer_param(t, 0, tmbuf);
+
+  return fscw_time_t_wrap(ret);
+}
+
+/**
+ * @fn int strptime(const char *buf, const char *fmt, struct tm *t)
+ * @brief parse time
+ *
+ * @crashcase TBD
+ * @fsctype TBD
+ *
+ * @author Lepidum Co., Ltd.
+ */
+fscw_int fscw_strptime(fscw_pointer_param(buf), fscw_pointer_param(fmt), fscw_pointer_param(t))
+{
+  fscw_string_buf b, f;
+  struct tm tm_n;
+  char *r;
+  ptrdiff_t n;
+
+  b = fscw_string_unwrap_param(buf, "strptime");
+  f = fscw_string_unwrap_param(fmt, "strptime");
+  r = strptime(b.v, f.v, &tm_n);
+  n = r - b.v;
+  fscw_string_release(b);
+  fscw_string_release(f);
+  if (r) {
+    fscw_struct_stdlib_tm tmbuf; 
+    fscw_struct_stdlib_tm_wrap(&tmbuf, &tm_n);
+    fscw_struct_stdlib_tm_write_pointer_param(t, 0, tmbuf);
+    return ptrvalue_of_base_ofs(buf_base, buf_ofs + n);
+  } else {
+    return fscw_pointer_wrap(NULL);
+  }
+}
+

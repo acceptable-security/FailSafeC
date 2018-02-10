@@ -1,0 +1,87 @@
+# Part of Fail-Safe C Compiler. (c) 2002-2004 Yutaka Oiwa.
+# parser/Makefile
+
+srcdir = @srcdir@
+builddir = @builddir@
+buildarchdir = $(builddir)/../arch-@target@
+LN_S = @LN_S@
+
+OCAMLMAKEFILE := $(srcdir)/../OCamlMakefile
+
+OCAML_DEFAULT_FLAGS :=
+OCAML_DEFAULT_DIRS := ../common
+include $(builddir)/../Makefile.ocamlc-common
+
+SOURCES := \
+	locterm.mli locterm.ml \
+	fsc_config.mli fsc_config.ml \
+	native_int_semantics.mli native_int_semantics.ml \
+	c_abstree.mli c_abstree.ml \
+	c_pp.mli c_pp.ml \
+	c_parserhelper.mli c_parserhelper.ml \
+	c_parser.mly \
+	c_lexer.mli c_lexer.mll \
+	ctt_abstree.mli ctt_abstree.ml \
+	cttm_abstree.mli cttm_abstree.ml \
+	ctt_formatter.mli ctt_formatter.ml \
+	parse_const.mli parse_const.ml \
+	reduce.mli reduce.ml \
+	ctt_visitor.mli ctt_visitor.ml \
+	update_struct_types.mli update_struct_types.ml \
+	c_typing.mli c_typing.ml \
+	expunge_localstatic.mli expunge_localstatic.ml \
+	ctt_pad_structures.mli ctt_pad_structures.ml \
+	ctt_add_tentative_initializer.mli ctt_add_tentative_initializer.ml \
+	ctt_reduce_mdarray.mli ctt_reduce_mdarray.ml \
+	ctt_remove_unuseddecls.mli ctt_remove_unuseddecls.ml \
+	ctt_reduce_unions.mli ctt_reduce_unions.ml \
+	cttm_expunge_assignment.mli cttm_expunge_assignment.ml \
+	il.mli \
+	il_formatter.mli il_formatter.ml \
+	il0.mli il0.ml \
+	separate_side_effect.mli separate_side_effect.ml \
+	il1.mli \
+	flatten_statement.mli flatten_statement.ml \
+	il2.mli il2_formatter.mli il2_formatter.ml \
+	il2_add_block_to_top.mli il2_add_block_to_top.ml \
+	il2_reduce_local_variable.mli il2_reduce_local_variable.ml \
+	classify_local.mli classify_local.ml \
+	il0_translate_bitfield.mli il0_translate_bitfield.ml \
+	il0_type_canonify.mli il0_type_canonify.ml \
+	cttm_to_ctt.mli cttm_to_ctt.ml \
+	ctt_to_ptree.mli ctt_to_ptree.ml \
+	parser_loadup.mli parser_loadup.ml
+
+PACKS = extlib num unix str
+LIBS = common
+
+RESULT := parser
+
+PRE_TARGETS += subdirs
+
+all: fsc_config.ml $(ALL_LIBRARY_TARGETS) top
+
+fsc_config.ml:
+	$(RM) $@
+	$(LN_S) $(buildarchdir)/parser/$@ $@
+
+subdirs:
+	$(MAKE) -C ../common OCAML_DEFAULT_DIRS= LIBS= $(ALL_LIBRARY_TARGETS)
+
+clean:: clean-subdirs
+
+clean-subdirs:
+	cd ../common; $(MAKE) OCAML_DEFAULT_DIRS= clean
+
+distclean-sub:
+	rm -f Makefile fsc_config.ml
+
+symlink:
+	if test '$(srcdir)' != '$(builddir)' ; then \
+	  for i in $(filter-out fsc_config.ml, $(SOURCES)) ; do \
+	    $(RM) $$i ; \
+	    $(LN_S) $(srcdir)/$$i $$i ; \
+	  done ; \
+	fi
+
+include $(OCAMLMAKEFILE)

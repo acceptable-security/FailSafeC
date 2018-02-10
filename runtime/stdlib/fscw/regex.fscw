@@ -1,0 +1,143 @@
+/* -*- C -*- */
+
+%% C-PROLOGUE
+#include <sys/types.h>
+#include <regex.h>
+
+%% FSC-PROLOGUE
+#include <sys/types.h>
+#include <regex.h>
+
+%% REQUIRED-DECLS
+typedef size_t;
+typedef regoff_t;
+typedef regex_t;
+typedef regmatch_t;
+require_function regcomp;
+require_function regexec;
+require_function regerror;
+require_function regfree;
+
+%% NATIVE-IMPLEMENTATION
+#include "../private_storage.h"
+#include <string.h>
+
+
+static const char private_storage_regex_t_tag[] = "regex_t";
+
+/**
+ * @fn int regcomp(regex_t *preg, const char *pattern, int cflags)
+ * @brief compile regular expression
+ *
+ * @author Lepidum Co., Ltd.
+ */
+fscw_int fscw_regcomp(fscw_pointer_param(preg),
+                      fscw_string_param(pattern),
+                      fscw_int_param(cflags))
+{
+  fscw_regex_t buf;
+  regex_t *native_preg = fsc_alloc_raw(sizeof(regex_t));
+  void *t;
+  char *s = wrapper_get_string_z(pattern_base, pattern_ofs, &t, "regcomp");
+  int ret = regcomp(native_preg, s, cflags);
+  wrapper_release_tmpbuf(t);
+
+  if (ret == 0) {
+    fscw_size_t_wrap_write(fscw_size_t_member(&buf, re_nsub), native_preg->re_nsub);
+    fscw_pointer_wrap_write(fscw_pointer_member(&buf, __data), alloc_private_storage(native_preg, private_storage_regex_t_tag));
+  } else {
+    fscw_pointer_wrap_write(fscw_pointer_member(&buf, __data), alloc_private_storage(NULL, private_storage_regex_t_tag));
+  }
+
+  fscw_regex_t_write_pointer_param(preg, 0, buf);
+  return fscw_int_wrap(ret);
+}
+
+/**
+ * @fn void regfree(regex_t *preg)
+ * @brief free memory allocated by regcomp
+ *
+ * @author Lepidum Co., Ltd.
+ */
+void fscw_regfree(fscw_pointer_param(preg))
+{
+  fscw_regex_t buf = fscw_regex_t_read_pointer_param(preg, 0);
+  ptrvalue data = fscw_pointer_read(fscw_pointer_member(&buf, __data));
+  regex_t *native_preg = get_private_storage(base_of_ptrvalue(data), ofs_of_ptrvalue(data), private_storage_regex_t_tag);
+  if (native_preg != NULL) {
+    regfree(native_preg);
+    fsc_release_raw(native_preg);
+    set_private_storage(base_of_ptrvalue(data), ofs_of_ptrvalue(data), NULL, private_storage_regex_t_tag);
+  }
+}
+
+/**
+ * @fn int regexec(const regex_t *preg, const char *string, size_t nmatch, regmatch_t pmatch[], int eflags)
+ * @brief compare string with compiled regular expression
+ * @todo regoff_t should be the same as the native environment
+ *
+ * @author Lepidum Co., Ltd.
+ */
+fscw_int fscw_regexec(fscw_pointer_param(preg),
+                      fscw_string_param(string),
+                      fscw_size_t_param(nmatch),
+                      fscw_pointer_param(pmatch),
+                      fscw_int_param(eflags))
+{
+  fscw_regex_t buf = fscw_regex_t_read_pointer_param(preg, 0);
+  ptrvalue data = fscw_pointer_read(fscw_pointer_member(&buf, __data));
+  regex_t *native_preg = get_private_storage(base_of_ptrvalue(data), ofs_of_ptrvalue(data), private_storage_regex_t_tag);
+  if (native_preg != NULL) {
+    size_t i;
+    fscw_regmatch_t tmp;
+    void *t;
+    char *s = wrapper_get_string_z(string_base, string_ofs, &t, "regcomp");
+    regmatch_t *p = fsc_alloc_raw(sizeof(regmatch_t) * nmatch);
+    int result = regexec(native_preg, s, nmatch, p, eflags);
+    wrapper_release_tmpbuf(t);
+    for (i = 0; i < nmatch; ++i) {
+      fscw_regoff_t_wrap_write(fscw_regoff_t_member(&tmp, rm_so), (int)p[i].rm_so);
+      fscw_regoff_t_wrap_write(fscw_regoff_t_member(&tmp, rm_eo), (int)p[i].rm_eo);
+      fscw_regmatch_t_write_pointer_param(pmatch, i, tmp);
+    }
+    fsc_release_raw(p);
+    return fscw_int_wrap(result);
+  }
+  else {
+    return fscw_int_wrap(REG_BADPAT);
+  }
+}
+
+/**
+ * @fn size_t regerror(int errcode, const regex_t *preg, char *errbuf, size_t errbuf_size);
+ * @brief provide error string from error code
+ *
+ * @author Lepidum Co., Ltd.
+ */
+fscw_size_t fscw_regerror(fscw_int_param(errcode),
+                          fscw_pointer_param(preg),
+                          fscw_string_param(errbuf),
+                          fscw_size_t_param(errbuf_size))
+{
+  fscw_regex_t buf;
+  ptrvalue data;
+  regex_t *native_preg;
+
+  if (base_remove_castflag(preg_base)) {
+    buf = fscw_regex_t_read_pointer_param(preg, 0);
+    data = fscw_pointer_read(fscw_pointer_member(&buf, __data));
+    native_preg = get_private_storage(base_of_ptrvalue(data), ofs_of_ptrvalue(data), private_storage_regex_t_tag);
+  } else {
+    native_preg = NULL;
+  }
+
+  if (errbuf_size == 0) {
+    return fscw_size_t_wrap(regerror(errcode, native_preg, NULL, 0));
+  } else {
+    void *t;
+    char *s = wrapper_get_read_buffer(errbuf_base, errbuf_ofs, &t, errbuf_size, "regerror");
+    size_t result = regerror(errcode, native_preg, s, errbuf_size);
+    wrapper_writeback_release_tmpbuf(errbuf_base, errbuf_ofs, t, strlen(s) + 1);
+    return fscw_size_t_wrap(result);
+  }
+}

@@ -1,0 +1,72 @@
+/* -*- C -*- */
+
+%% C-PROLOGUE
+#include <sys/statvfs.h>
+
+%% FSC-PROLOGUE
+#include <sys/statvfs.h>
+
+%% REQUIRED-DECLS
+struct stdlib_statvfs;
+typedef fsblkcnt_t;
+typedef fsfilcnt_t;
+
+require_function statvfs;
+require_function fstatvfs;
+
+%% NATIVE-IMPLEMENTATION
+
+static void wrap_statvfs(fscw_struct_stdlib_statvfs *dst, struct statvfs *src)
+{
+  fscw_unsigned_long_wrap_write(fscw_unsigned_long_member(dst, f_bsize), src->f_bsize);
+  fscw_unsigned_long_wrap_write(fscw_unsigned_long_member(dst, f_frsize), src->f_frsize);
+  fscw_unsigned_long_wrap_write(fscw_unsigned_long_member(dst, f_fsid), src->f_fsid);
+  fscw_unsigned_long_wrap_write(fscw_unsigned_long_member(dst, f_flag), src->f_flag);
+  fscw_unsigned_long_wrap_write(fscw_unsigned_long_member(dst, f_namemax), src->f_namemax);
+
+  fscw_fsblkcnt_t_wrap_write(fscw_fsblkcnt_t_member(dst, f_blocks), src->f_blocks);
+  fscw_fsblkcnt_t_wrap_write(fscw_fsblkcnt_t_member(dst, f_bfree), src->f_bfree);
+  fscw_fsblkcnt_t_wrap_write(fscw_fsblkcnt_t_member(dst, f_bavail), src->f_bavail);
+
+  fscw_fsfilcnt_t_wrap_write(fscw_fsfilcnt_t_member(dst, f_files), src->f_files);
+  fscw_fsfilcnt_t_wrap_write(fscw_fsfilcnt_t_member(dst, f_ffree), src->f_ffree);
+  fscw_fsfilcnt_t_wrap_write(fscw_fsfilcnt_t_member(dst, f_favail), src->f_favail);
+}
+
+/**
+ * @fn int statvfs(const char *path, struct statvfs *dst)
+ * @brief get vfs param
+ *
+ * @author Lepidum Co., Ltd.
+ */
+fscw_int fscw_statvfs(fscw_string_param(path), fscw_pointer_param(dst))
+{
+  fscw_string_buf path_b = fscw_string_unwrap_param(path, "statvfs");
+  fscw_struct_stdlib_statvfs buf;
+  struct statvfs v;
+  int ret = statvfs(path_b.v, &v);
+  if (ret == 0) {
+    wrap_statvfs(&buf, &v);
+    fscw_struct_stdlib_statvfs_write_pointer_param(dst, 0, buf);
+  }
+  fscw_string_release(path_b);
+  return fscw_int_wrap(ret);
+}
+
+/**
+ * @fn int fstatvfs(int fd, struct statvfs *dst)
+ * @brief get vfs param
+ *
+ * @author Lepidum Co., Ltd.
+ */
+fscw_int fscw_fstatvfs(fscw_int_param(fd), fscw_pointer_param(dst))
+{
+  fscw_struct_stdlib_statvfs buf;
+  struct statvfs v;
+  int ret = fstatvfs(fd, &v);
+  if (ret == 0) {
+    wrap_statvfs(&buf, &v);
+    fscw_struct_stdlib_statvfs_write_pointer_param(dst, 0, buf);
+  }
+  return fscw_int_wrap(ret);
+}

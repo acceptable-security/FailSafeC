@@ -1,0 +1,55 @@
+srcdir = @srcdir@
+builddir = @builddir@
+LN_S = @LN_S@
+
+OCAMLMAKEFILE := $(srcdir)/../OCamlMakefile
+
+# include Makefile.config
+
+OCAML_DEFAULT_FLAGS := -w y
+OCAML_DEFAULT_DIRS := ../common ../parser ../trans
+
+NCSUFFIX = .nc
+BCSUFFIX = .bc
+
+SOURCES := \
+	linker_types.mli linker_types.ml \
+	parse_typeinfo.mli parse_typeinfo.ml \
+	collect_modules.mli collect_modules.ml \
+	resolve.mli resolve.ml \
+	generate_link_stubs.mli generate_link_stubs.ml \
+	generate_ldscript.mli generate_ldscript.ml \
+	linker_main.mli linker_main.ml
+
+PACKS := extlib num unix str
+LIBS := common parser trans
+
+RESULT := link
+
+PRE_TARGETS += subdirs
+
+include $(builddir)/../Makefile.ocamlc-common
+
+all: top $(ALL_EXECUTIVE_TARGETS) copy_progs
+
+subdirs:
+	OCAML_DEFAULT_DIRS= LIBS= BCSUFFIX= $(MAKE) -C ../trans $(ALL_LIBRARY_TARGETS)
+
+clean:: clean-subdirs
+	rm -f link.a
+
+clean-subdirs:
+	cd ../trans; OCAML_DEFAULT_DIRS= LIBS= $(MAKE) clean
+
+distclean-sub:
+	rm -f Makefile ../compiler/link.bc $(if $(OCAML_BYTECODE_ONLY),,../compiler/link.nc)
+
+symlink:
+	if test '$(srcdir)' != '$(builddir)' ; then \
+	  for i in $(SOURCES) ; do \
+	    $(RM) $$i ; \
+	    $(LN_S) $(srcdir)/$$i $$i ; \
+	  done ; \
+	fi
+
+include $(OCAMLMAKEFILE)

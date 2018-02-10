@@ -1,0 +1,63 @@
+/* -*- C -*- */
+
+%% C-PROLOGUE
+#define _ISOC99_SOURCE
+#include <locale.h>
+
+%% FSC-PROLOGUE
+#include <locale.h>
+
+%% REQUIRED-DECLS
+struct stdlib_lconv;
+
+require_function localeconv;
+
+%% NATIVE-IMPLEMENTATION
+#include <locale.h>
+
+#define string_write(fsc, raw, memb) \
+	fscw_string_wrap_write(fscw_pointer_member(fsc, \
+	memb), raw->memb)
+#define char_write(fsc, raw, memb) \
+	fscw_char_wrap_write(fscw_char_member(fsc, memb), raw->memb)
+/**
+ * @fn struct lconv *localeconv(void)
+ * @brief return locale-specific information
+ *
+ * @author Lepidum Co., Ltd.
+ */
+fscw_pointer fscw_localeconv(void)
+{
+	struct lconv *p;
+	fscw_struct_stdlib_lconv *ret;
+
+	p = localeconv();
+	ret = fscw_struct_stdlib_lconv_alloc(1);
+
+	string_write(ret, p, decimal_point);
+	string_write(ret, p, thousands_sep);
+	string_write(ret, p, grouping);
+	string_write(ret, p, int_curr_symbol);
+	string_write(ret, p, currency_symbol);
+	string_write(ret, p, mon_decimal_point);
+	string_write(ret, p, mon_grouping);
+	string_write(ret, p, positive_sign);
+	string_write(ret, p, negative_sign);
+	char_write(ret, p, int_frac_digits);
+	char_write(ret, p, frac_digits);
+	char_write(ret, p, p_cs_precedes);
+	char_write(ret, p, p_sep_by_space);
+	char_write(ret, p, n_cs_precedes);
+	char_write(ret, p, n_sep_by_space);
+	char_write(ret, p, p_sign_posn);
+	char_write(ret, p, n_sign_posn);
+
+	char_write(ret, p, int_p_cs_precedes);
+	char_write(ret, p, int_n_cs_precedes);
+	char_write(ret, p, int_p_sep_by_space);
+	char_write(ret, p, int_n_sep_by_space);
+	char_write(ret, p, int_p_sign_posn);
+	char_write(ret, p, int_n_sign_posn);
+
+	return fscw_pointer_wrap(ret);
+}

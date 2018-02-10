@@ -1,0 +1,81 @@
+/* -*- C -*- */
+
+%% C-PROLOGUE
+#include <inttypes.h>
+
+%% FSC-PROLOGUE
+#include <inttypes.h>
+
+%% REQUIRED-DECLS
+typedef intmax_t;
+typedef uintmax_t;
+
+auto_generate imaxabs;
+require_function imaxdiv;
+require_function strtoimax;
+require_function strtoumax;
+
+%% NATIVE-IMPLEMENTATION
+
+#include <wrapper/fscw_helper.h>
+
+/**
+ * @fn imaxdiv_t imaxdiv(intmax_t num, intmax_t denom)
+ * @brief divide integer
+ *
+ * @author Lepidum Co., Ltd.
+ */
+fscw_imaxdiv_t fscw_imaxdiv(fscw_intmax_t_param(num),
+                            fscw_intmax_t_param(denom))
+{
+  imaxdiv_t v = imaxdiv(num, denom);
+  fscw_imaxdiv_t fv;
+  fscw_intmax_t_wrap_write(fscw_intmax_t_member(&fv, quot), v.quot);
+  fscw_intmax_t_wrap_write(fscw_intmax_t_member(&fv, rem), v.rem);
+  return fv;
+}
+
+/**
+ * @fn intmax_t strtoimax(const char *s, char **endp, int base)
+ * @brief convert string to integer
+ *
+ * @author Lepidum Co., Ltd.
+ */
+fscw_intmax_t fscw_strtoimax(fscw_string_param(s),
+                             fscw_pointer_param(endp),
+                             fscw_int_param(base))
+{
+  fscw_string_buf buf = fscw_string_unwrap_param(s, "strtoimax");
+  char *p = NULL;
+  intmax_t v = strtoimax(buf.v, &p, base);
+  if (p && fscw_is_not_null(endp)) {
+    fscw_pointer q = ptrvalue_of_base_ofs(s_base,
+                                          s_ofs + (p - buf.v));
+    fscw_pointer_write_pointer_param(endp, 0, q);
+  }
+  fscw_string_release(buf);
+  return fscw_intmax_t_wrap(v);
+}
+
+/**
+ * @fn uintmax_t strtoumax(const char *s, char **endp, int base)
+ * @brief convert string to integer
+ *
+ * @author Lepidum Co., Ltd.
+ */
+fscw_uintmax_t fscw_strtoumax(fscw_string_param(s),
+                              fscw_pointer_param(endp),
+                              fscw_int_param(base))
+{
+  fscw_string_buf buf = fscw_string_unwrap_param(s, "strtouimax");
+  char *p = NULL;
+  uintmax_t v = strtoumax(buf.v, &p, base);
+  if (p && fscw_is_not_null(endp)) {
+    fscw_pointer q = ptrvalue_of_base_ofs(s_base,
+                                          s_ofs + (p - buf.v));
+    fscw_pointer_write_pointer_param(endp, 0, q);
+  }
+  fscw_string_release(buf);
+  return fscw_uintmax_t_wrap(v);
+}
+

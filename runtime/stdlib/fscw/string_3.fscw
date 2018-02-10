@@ -1,0 +1,45 @@
+/* -*- C -*- */
+
+%% C-PROLOGUE
+#define _XOPEN_SOURCE 600
+#include <string.h>
+
+%% FSC-PROLOGUE
+#include <string.h>
+
+%% REQUIRED-DECLS
+auto_generate strcoll;
+
+require_function strxfrm;
+
+%% NATIVE-IMPLEMENTATION
+
+#include <wrapper/fscw_helper.h>
+
+/**
+ * @fn size_t strxfrm(char *s1, const char *s2, size_t n)
+ * @brief string transformation
+ *
+ * @author Lepidum Co., Ltd.
+ */
+fscw_size_t fscw_strxfrm(fscw_string_param(s1),
+                         fscw_string_param(s2),
+                         fscw_size_t_param(n))
+{
+  char *dst = NULL;
+  void *tmp = NULL;
+  fscw_string_buf src = {0, 0};
+  size_t ret;
+
+  if (n != 0) {
+    /* if n is 0, s1 is permitted to be a null pointer. */
+    dst = wrapper_get_string_zn(s1_base, s1_ofs, &tmp, n + 1, "strxfrm");
+  }
+  src = fscw_string_unwrap_param(s2, "strxfrm");
+  ret = strxfrm((char *)dst, src.v, n);
+  fscw_string_release(src);
+  if (n != 0) {
+    wrapper_writeback_release_tmpbuf(s1_base, s1_ofs, tmp, strlen(dst) + 1);
+  }
+  return fscw_size_t_wrap(ret);
+}

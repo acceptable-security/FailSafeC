@@ -1,0 +1,23 @@
+#directory "../parser";;
+open Big_int;;
+open Ctt_abstree;;
+open Trans_loadup;;
+#install_printer print_bigint;;
+#install_printer print_c_type;;
+#install_printer print_expr;;
+#install_printer print_mexpr;;
+#install_printer print_global_declaration;;
+#install_printer print_global_declarations;;
+#install_printer print_il0;;
+#install_printer print_il1;;
+(*#install_printer print_il;;
+#install_printer print_ils;;
+#install_printer print_ilsinit;;
+#install_printer print_ilc;;
+#install_printer print_ilc0;;*)
+#install_printer print_int_set;;
+#install_printer print_c_program;;
+#install_printer print_untyped_expr;;
+#install_printer print_untyped_statement;;
+#print_length 5000;;
+C_lexer.use_failsafec_extension := true

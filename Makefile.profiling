@@ -1,0 +1,19 @@
+include Makefile.ocamlc-common
+
+all: make-pncl trans/trans.ncp
+
+make-pncl:
+	rm */*.cmx */*.cmxa
+	$(MAKE) -C common pncl
+	$(MAKE) -C parser pncl
+	$(MAKE) -C trans pncl
+	$(MAKE) -C linker pncl pnc NCSUFFIX='.ncp'
+
+trans/trans.ncp:
+	cd trans; $(MAKE) -f ../OCamlMakefile \
+		OCAMLMAKEFILE=../OCamlMakefile \
+		SOURCES=trans_main.ml \
+		RESULT=trans LIBS='common parser trans' \
+		OCAML_DEFAULT_DIRS='../common ../parser' \
+		PACKS='extlib num str unix' \
+		OCAMLFLAGS='$(OCAMLFLAGS)' NCSUFFIX='.ncp' pnc

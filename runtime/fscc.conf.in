@@ -1,0 +1,26 @@
+$fscc_revision = '@PACKAGE_VERSION@';
+
+@gcc_cmd = (
+          @CC_PL@
+        );
+@gccopts_opt_oflag = (
+	  @FSCC_CFLAGS_OPT_OFLAG_PL@
+        );
+@gccopts_opt = (
+	  @FSCC_CFLAGS_OPT_PL@
+	  @CPPFLAGS_PL@
+        );
+@gccopts_debug = (
+	  @FSCC_CFLAGS_DEBUG_PL@
+	  @CPPFLAGS_PL@
+          '-DFSC_DEBUG_RUNTIME'
+        );
+@gcclibs_native = (
+	  @LDFLAGS_PL@
+	  @LIBS_PL@
+        );
+$gcc_tune_option_type = "@FSCC_GCC_TUNE_FLAG@";
+$gcc_iquote_option_type = "@FSC_CC_IQUOTE_STYLE@";
+@gcc_default_tune_options = (
+	  @FSCC_GCC_ARCH_DEFAULT_PL@
+	);

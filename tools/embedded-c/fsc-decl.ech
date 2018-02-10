@@ -1,0 +1,421 @@
+/* -*- c -*- */
+#include <malloc.h>
+#include <string.h>
+#include <stdlib.h>
+#include <assert.h>
+
+enum { VOID = 0, INT, LONG, LONGLONG, CHAR, SHORT, FLOAT, DOUBLE, LONGDOUBLE,
+       OTHERS };
+enum { NARROWINTS = 1, FATINTS, POINTERS, FLOATS };
+
+#define WORDSIZE (sizeof(void *))
+const char *typename[2][OTHERS+1] = {
+    { "void", "unsigned int", "unsigned long", "unsigned long long",
+      "unsigned char", "unsigned short",
+      "float", "double", "long double", 0 },
+    { "void", "int", "long", "long long",
+      "signed char", "short",
+      "float", "double", "long double", 0 } };
+const char *enctypeid[OTHERS+1] = 
+    { "v", "i", "l", "q", "c", "s", "f", "d", "e" };
+const int typesize[OTHERS + 1] = 
+    { 0, sizeof(int), sizeof(long), sizeof(long long), 
+      sizeof(char), sizeof(short), sizeof(float),
+      sizeof(double), sizeof(long double) };
+const int typekind[OTHERS + 1] = 
+    { VOID,
+      (sizeof(int)       >= WORDSIZE) ? FATINTS : NARROWINTS,
+      (sizeof(long)      >= WORDSIZE) ? FATINTS : NARROWINTS,
+      (sizeof(long long) >= WORDSIZE) ? FATINTS : NARROWINTS,
+      (sizeof(char)      >= WORDSIZE) ? FATINTS : NARROWINTS,
+      (sizeof(short)     >= WORDSIZE) ? FATINTS : NARROWINTS,
+      FLOATS, 
+      FLOATS,
+      FLOATS,
+      -1
+    };
+
+int calculate_typeid(int size2) {
+    int size = size2 / 2;
+    if (size2 & 1) {
+	if (size == sizeof(double))
+	    return DOUBLE;
+	else if (size == sizeof(float))
+	    return FLOAT;
+	/*    else if (size == sizeof(long double))
+	      return LONGDOUBLE; */
+	else {
+	    fprintf(stderr, "cannot find float type of size %d\n", size);
+	    exit (1);
+	}
+    } else {
+	if (size == sizeof(int))
+	    return INT;
+	else if (size == sizeof(long))
+	    return LONG;
+	else if (size == sizeof(long long))
+	    return LONGLONG;
+	else if (size == sizeof(char))
+	    return CHAR;
+	else if (size == sizeof(short))
+	    return SHORT;
+	else {
+	    fprintf(stderr, "cannot find integer type of size %d\n", size);
+	    exit (1);
+	}
+    }
+}
+
+char *wordsizename(int size) {
+    switch ((size + WORDSIZE - 1) / WORDSIZE) {
+    case 1:
+	return "word";
+    case 2:
+	return "dword";
+    default:
+	fprintf(stderr, "cannot find appropriate word(raw narrow) type for size %d\n", size);
+	exit(1);
+    }
+}
+
+char *valuesizename(int size) {
+    switch ((size + WORDSIZE - 1) / WORDSIZE) {
+    case 1:
+	return "value";
+    case 2:
+	return "dvalue";
+    default:
+	fprintf(stderr, "cannot find appropriate value(fat) type for size %d\n", size);
+	exit(1);
+    }
+}
+
+#ifdef __failsafeC
+#define __typeof(x) x
+#define calloc(x,y) malloc((x)*(y))
+#endif
+#define type_is_signed(v) ((__typeof(v)) (-1) < 0)
+#define typeid(typ) \
+   calculate_typeid((int)((sizeof (typ) + (__typeof(typ))0.5) * 2))
+
+struct decltypeinfo {
+    const char *name;
+    int kind;
+    int id;
+    int size;
+    int roundupsize;
+    int ptrs;
+    const char *encid;
+    const char *rettypename;
+};
+
+void record_type(struct decltypeinfo *t, int tid, int is_signed,
+		 int ptrs) {
+    t->id = tid;
+    t->ptrs = ptrs;
+    t->encid = enctypeid[tid];
+    if (ptrs) {
+	t->kind = POINTERS;
+	t->size = WORDSIZE;
+	t->roundupsize = WORDSIZE;
+	t->name = 0;
+	t->rettypename = "ptrvalue";
+    } else {
+	t->kind = typekind[tid];
+	t->size = typesize[tid];
+	t->roundupsize = (t->size + WORDSIZE - 1) / WORDSIZE * WORDSIZE;
+	t->name = typename[is_signed][tid];
+	if (t->kind == NARROWINTS || t->kind == FLOATS || t->kind == VOID) {
+	    t->rettypename = t->name;
+	} else if (t->kind == FATINTS) {
+	    t->rettypename = valuesizename(t->size);
+	} else {
+	    assert (0);
+	}
+    }
+}
+
+void record_type_direct(struct decltypeinfo *t, char *encid, int ptrs) {
+    t->id = OTHERS;
+    t->ptrs = ptrs;
+    t->kind = POINTERS;
+    t->size = WORDSIZE;
+    t->roundupsize = WORDSIZE;
+    t->name = 0;
+    t->encid = encid;
+}
+
+#define WRAPPER_RET_VOID() \
+   record_type(dinfo.rettype, VOID, 0, 0);
+#define WRAPPER_RET_VAL(typ) \
+   record_type(dinfo.rettype, typeid(typ), type_is_signed(typ), 0);
+#define WRAPPER_RET_PTRVAL(typ, n) \
+   record_type(dinfo.rettype, typeid(typ), type_is_signed(typ), n);
+#define WRAPPER_RET_PTR(typ, n) record_type_direct(dinfo.rettype,typ,n);
+
+#define WRAPPER_ARG_VAL(id,typ)				\
+   dinfo.argnames[dinfo.argnum] = #id;			\
+   record_type(&dinfo.argtypes[dinfo.argnum],		\
+	       typeid(typ), type_is_signed(typ), 0);	\
+   dinfo.argnum++;
+#define WRAPPER_ARG_PTRVAL(id,typ,n)			\
+   dinfo.argnames[dinfo.argnum] = #id;			\
+   record_type(&dinfo.argtypes[dinfo.argnum], 		\
+	       typeid(typ), type_is_signed(typ), n);	\
+   dinfo.argnum++;
+#define WRAPPER_ARG_PTR(id,typ,n)				\
+   dinfo.argnames[dinfo.argnum] = #id;				\
+   record_type_direct(&dinfo.argtypes[dinfo.argnum], #typ, n);	\
+   dinfo.argnum++;
+
+struct declinfo {
+    const char *funcname;
+
+    struct decltypeinfo *argtypes, *rettype;
+    const char **argnames;
+
+    int argnum, arg_is_va;
+};
+
+void setup_declinfo(struct declinfo *dinfo, int n) {
+    dinfo->argtypes = calloc(n + 1, sizeof(struct decltypeinfo));
+    dinfo->argnames = calloc(n + 1, sizeof(char *));
+    dinfo->rettype = calloc(1, sizeof(struct decltypeinfo));
+    dinfo->argnum = 0;
+    dinfo->arg_is_va = 0;
+}
+
+void release_declinfo(struct declinfo *dinfo) {
+    free(dinfo->argtypes);
+    free(dinfo->argnames);
+    free(dinfo->rettype);
+}
+
+#define WRAPPER_ARG_VA() dinfo.arg_is_va = 1;
+
+#define __WRAPPER_RESYNC_LINES  printf("\n#line %d \"%s\"\n", __LINE__ + 1, __FILE__);
+
+#define WRAPPER_FUNCDECL_BEGIN(name,n)		\
+{						\
+    struct declinfo dinfo;			\
+    setup_declinfo(&dinfo, n);			\
+    dinfo.funcname = #name;
+
+#define WRAPPER_FUNCDECL_BODY			\
+    print_fsdecl(&dinfo, 1);			\
+    printf("\n");				\
+    print_defreturn(&dinfo);			\
+    __WRAPPER_RESYNC_LINES
+
+#define WRAPPER_FUNCDECL_END			\
+    printf("\n#undef FSC_RETURN_VAL\n");	\
+    print_fgfunc(&dinfo);			\
+    print_linkinfo(&dinfo);			\
+    release_declinfo(&dinfo);			\
+}						\
+__WRAPPER_RESYNC_LINES
+
+#define WRAPPER_INIT				\
+  print_headings();				\
+  __WRAPPER_RESYNC_LINES
+
+#define WRAPPER_FINISH				\
+  print_footings();				\
+  __WRAPPER_RESYNC_LINES
+
+void print_ptrtypeid(int n, const char *id) {
+    printf("%.*s%s", n, "PPPPPPPPPPPPPPPPPPP", id);
+}
+
+void print_defreturn(struct declinfo *dinfo) {
+    switch (dinfo->rettype->kind) {
+    case FATINTS:
+	printf ("#define FSC_RETURN_VAL(v) return %s_of_%s((%s)(v))\n",
+		valuesizename(dinfo->rettype->size),
+		wordsizename(dinfo->rettype->size),
+		dinfo->rettype->name);
+	break;
+    case NARROWINTS:
+    case FLOATS:
+	printf ("#define FSC_RETURN_VAL(v) return (v)\n");
+	break;
+    default:
+	printf ("#define FSC_RETURN_VAL(v) fsc-return-val should not be called here!!!\n");
+	break;
+    }
+}
+
+void print_fsdecl(struct declinfo *dinfo, int put_type) {
+    int i;
+    if (put_type == 1) 
+	printf("%s ", dinfo->rettype->rettypename);
+    if (put_type != 2) {
+	printf("FS_F");
+    } else {
+	printf("F");
+    }
+    for (i = 0; i < dinfo->argnum; i++) {
+	struct decltypeinfo *t = &dinfo->argtypes[i];
+	print_ptrtypeid(t->ptrs, t->encid);
+    }
+    printf("_");
+    print_ptrtypeid(dinfo->rettype->ptrs, dinfo->rettype->encid);
+    if (put_type == 2)
+	return;
+    printf("_%s (", dinfo->funcname);
+    for (i = 0; i < dinfo->argnum; i++) {
+	struct decltypeinfo *t = &dinfo->argtypes[i];
+	const char *name = dinfo->argnames[i];
+	if (i != 0) printf(", ");
+	switch (t->kind) {
+	case FATINTS:
+	    if (put_type) printf("base_t ");
+	    printf ("%s_b, ", name);
+	    /* FALLTHROUGH */
+	case NARROWINTS:
+	case FLOATS:
+	    if (put_type) printf("%s ", t->name);
+	    printf ("%s", name);
+	    break;
+	case POINTERS:
+	    if (put_type) printf("base_t ");
+	    printf ("%s_b, ", name);
+	    if (put_type) printf("ofs_t ");
+	    printf ("%s_o", name);
+	    break;
+	default:
+	    fprintf(stderr, "%d\n", t->kind);
+	    assert(0);
+	}
+    };
+    if (dinfo->arg_is_va) {
+	if (i != 0) printf(", ");
+	if (put_type) printf("base_t ");
+	printf ("va_b, ");
+	if (put_type) printf("ofs_t ");
+	printf ("va_o");
+    }
+    printf(")");
+}
+
+void print_headings() {
+    printf("#line %d \"%s (auto-generated)\"\n", __LINE__ + 1, __FILE__);
+    printf("#define FSC_RUNTIME_LIBRARY\n"
+	   "#include <fsc_runtime.h>\n"
+	   "#include <fsc_linkinfo.h>\n"
+	   "BEGIN_FSC_TYPEINFO\n");
+}
+
+void print_footings() {
+    printf("#line %d \"%s (auto-generated)\"\n", __LINE__ + 1, __FILE__);
+    printf("END_FSC_TYPEINFO\n");
+}
+
+void print_linkinfo(struct declinfo *dinfo) {
+    printf("FSC_PROVIDE_VALUE(%s,\"", dinfo->funcname);
+    print_fsdecl(dinfo, 2);
+    printf("\")\n");
+}
+
+void print_fgfunc(struct declinfo *dinfo) {
+    int i, j = 0;
+    printf("\n#line %d \"%s (auto-generated)\"\n", __LINE__ + 1, __FILE__);
+    printf("dvalue FG_%s(base_t FAva_b)\n"
+	   "{\n", dinfo->funcname);
+    for(i = 0; i < dinfo->argnum; i++) {
+	struct decltypeinfo *t = &dinfo->argtypes[i];
+	const char *name = dinfo->argnames[i];
+	switch (t->kind) {
+	case NARROWINTS:
+	    printf ("  %s %s = (%s)vaddr_of_value(read_word(FAva_b, %d));\n",
+		    t->name,
+		    name,
+		    t->name, j);
+	    break;
+	case FLOATS:
+	    {
+		const char * bitstype = wordsizename(t->size);
+		printf ("  %s %s = %s_of_%s(vaddr_of_%s(read_%s(FAva_b, %d)));\n",
+			t->name, name, 
+			t->name, bitstype,
+			valuesizename(t->size),
+			bitstype,
+			j);
+	    }
+	    break;
+	case FATINTS:
+	    printf ("  %s %s_f = read_%s(FAva_b, %d);\n"
+		    "  base_t %s_b = base_of_%s(%s_f);\n"
+		    "  %s %s = (%s)vaddr_of_%s(%s_f);\n",
+		    valuesizename(t->size), name,
+		    wordsizename(t->size), j,
+		    name, valuesizename(t->size), name,
+		    t->name, name,
+		    t->name, valuesizename(t->size), name);
+	    break;
+	case POINTERS:
+	    printf ("  value %s_f = read_word(FAva_b, %d);\n"
+		    "  ofs_t %s_o = ofs_of_value(%s_f);\n"
+		    "  base_t %s_b = set_base_castflag(&fsc_typeinfo_",
+		    name, j,
+		    name, name, name);
+	    print_ptrtypeid(t->ptrs - 1, t->encid);
+	    printf (".val, base_of_value(%s_f), %s_o);\n",
+                    name, name);
+	    break;
+	default:
+	    assert(0);
+	    exit(1);
+	}
+	j += t->roundupsize;
+    }
+    if (dinfo->arg_is_va) {
+	printf ("  ofs_t va_o = %d;\n"
+		"  base_t va_b = FAva_b;\n", j);
+    }
+    if (dinfo->rettype->kind != VOID) 
+	printf("  %s retval = ", dinfo->rettype->rettypename);
+    else
+	printf("  ");
+    print_fsdecl(dinfo, 0);
+    printf (";\n");
+    if (!dinfo->arg_is_va)
+	printf ("  fsc_finish_varargs(FAva_b);\n");
+    switch (dinfo->rettype->kind) {
+    case NARROWINTS:
+	printf ("  return dvalue_of_dword(retval);\n");
+	break;
+    case FLOATS:
+	printf ("  return dvalue_of_dword(%s_of_%s(retval));\n",
+		wordsizename(dinfo->rettype->size), dinfo->rettype->name);
+	break;
+    case FATINTS:
+	{
+	    const char *nam = valuesizename(dinfo->rettype->size);
+	    if (strcmp(nam, "dvalue")) {
+		printf ("  return dvalue_of_%s(retval);\n", nam);
+	    } else {
+		printf ("  return retval;\n");
+	    }
+	}
+	break;
+    case POINTERS:
+	printf ("  return dvalue_of_value(value_of_ptrvalue(retval));\n");
+	break;
+    case VOID:
+	printf ("  return dvalue_of_dword(0);\n");
+	break;
+    default:
+	assert(0);
+    }
+    printf ("}\n");
+}
+
+/*
+inline static base_t set_base_castflag(typeinfo_t target_ti, base_t  b, ofs_t o)
+{
+    base_t b0 = base_remove_castflag(b);
+    if (b0 && target_ti == get_header_fast(b0)->tinfo && o % 1 == 0) return b0;
+    else return base_put_castflag(b0);
+}
+*/

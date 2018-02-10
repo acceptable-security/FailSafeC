@@ -1,0 +1,46 @@
+/* -*- C -*- */
+
+%% C-PROLOGUE
+#define _XOPEN_SOURCE 600
+#include <sys/socket.h>
+
+%% FSC-PROLOGUE
+#include <sys/socket.h>
+
+%% REQUIRED-DECLS
+
+require_function socketpair;
+
+auto_generate listen;
+auto_generate socket;
+auto_generate shutdown;
+auto_generate sockatmark;
+
+%% NATIVE-IMPLEMENTATION
+
+/**
+ * @fn int socketpair(int domain, int type, int protocol, int sock[2])
+ * @brief create a socket pair.
+ * @param domain socket domain.
+ * @param type socket type.
+ * @param protocol protocol family
+ * @param sock return values
+ * @retval 0 success, -1 on error
+ *
+ * @author Lepidum Co., Ltd.
+ */
+fscw_int fscw_socketpair(fscw_int_param(domain),
+                         fscw_int_param(type),
+                         fscw_int_param(protocol),
+                         fscw_pointer_param(sock))
+{
+  int s[2];
+  int ret;
+
+  ret = socketpair(domain, type, protocol, s);
+  if (ret == 0) {
+    fscw_int_write_pointer_param(sock, 0, s[0]);
+    fscw_int_write_pointer_param(sock, 1, s[1]);
+  }
+  return fscw_int_wrap(ret);
+}

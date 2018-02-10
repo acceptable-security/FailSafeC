@@ -1,0 +1,235 @@
+build_cross_compiler = @build_cross_compiler@
+srcdir = @srcdir@
+builddir = @builddir@
+srcarchdir = $(srcdir)/arch/@arch_alias@
+buildarchdir = $(builddir)/arch-@target@
+
+prefix = @prefix@
+exec_prefix = @exec_prefix@
+bindir = @bindir@
+libdir = @libdir@
+libfscdir = $(libdir)/fsc
+libfsctargetdir = $(libfscdir)/@fsc_target@
+
+LN_S = @LN_S@
+MKDIR_P = @MKDIR_P@
+
+all: build-compiler build-runtime prepare-test
+
+#
+# automatic reconfigure rules.
+#
+enable_reautoconf=@enable_reautoconf@
+
+ifneq '$(enable_reautoconf)' 'no'
+$(srcdir)/configure: $(srcdir)/configure.ac $(srcdir)/aclocal.m4
+	cd '$(srcdir)' && autoconf
+endif
+
+Makefile: $(srcdir)/Makefile.in config.status
+	./config.status
+
+config.status: $(srcdir)/configure
+	./config.status --recheck
+
+#
+# rules for 'arch-...' dir.
+#
+arch-files: make-arch-dir
+
+arch-dir-makefile: $(buildarchdir)/Makefile
+
+ifneq '$(enable_reautoconf)' 'no'
+$(srcdir)/arch/template/configure: $(srcdir)/arch/template/configure.ac $(srcdir)/arch/template/aclocal.m4
+	cd '$(srcdir)/arch/template' && autoconf
+endif
+
+$(buildarchdir)/Makefile: $(srcdir)/arch/template/Makefile.in $(buildarchdir)/config.status
+	cd $(buildarchdir) && ./config.status
+$(buildarchdir)/config.status: Makefile $(srcdir)/arch/template/configure
+	$(MKDIR_P) $(buildarchdir)
+	cd $(buildarchdir) && ../$(srcdir)/arch/template/configure @runtime_configure_opt@
+
+make-arch-dir: make-archdir-$(build_cross_compiler)
+	if [ "X`readlink include`" != "X$(buildarchdir)/include" ]; then \
+	  rm -f include ;\
+	  $(LN_S) $(buildarchdir)/include include ;\
+	fi
+
+make-archdir-native: $(buildarchdir)/config.status $(buildarchdir)/Makefile
+	@echo "making $(buildarchdir)"
+	$(MAKE) -C $(buildarchdir)
+
+make-archdir-cross: $(srcarchdir)
+	rm -f $(buildarchdir)
+	$(LN_S) $(srcarchdir) $(buildarchdir)
+
+install-arch-files: make-arch-dir
+	D="@abs_srcdir@/arch/@target@"; \
+	test -d "$$D" && echo "Error: $$D already exists." && exit 1; \
+	$(MAKE) -C $(buildarchdir) install-arch-files prefix="$$D"
+
+#
+# rules for building compiler. (common, parser, trans, linker, fscw)
+#
+.PHONY: build-compiler compiler
+
+compiler build-compiler: make-arch-dir Makefile.ocamlc-common trans linker fscw
+
+.PHONY: common parser trans linker fscw
+
+common parser trans linker fscw:
+	make -C $@
+
+parser: common
+trans: parser
+linker fscw: trans
+
+ifneq '$(srcdir)' '$(builddir)'
+
+common: symlink-compiler
+
+.PHONY: symlink-compiler
+
+symlink-compiler:
+	$(MAKE) -C common symlink
+	$(MAKE) -C parser symlink
+	$(MAKE) -C trans  symlink
+	$(MAKE) -C linker symlink
+	$(MAKE) -C fscw   symlink
+
+endif
+
+#
+# rules for 'runtime' subdir.
+#
+.PHONY: build-runtime runtime
+
+build-runtime runtime: build-compiler runtime/config.status runtime/Makefile
+	$(MAKE) -C runtime
+
+runtime-makefile: runtime/Makefile
+
+ifneq '$(enable_reautoconf)' 'no'
+$(srcdir)/runtime/configure: $(srcdir)/runtime/configure.ac $(srcdir)/runtime/aclocal.m4
+	cd '$(srcdir)/runtime' && autoconf
+endif
+
+runtime/Makefile: $(srcdir)/runtime/Makefile.in runtime/config.status
+	cd runtime && ./config.status
+
+runtime/config.status: Makefile $(srcdir)/runtime/configure
+	$(MKDIR_P) runtime
+	$(MAKE) run-runtime-configure-$(build_cross_compiler)
+
+run-runtime-configure-native:
+	cd runtime && ../$(srcdir)/runtime/configure @runtime_configure_opt@
+run-runtime-configure-cross:
+	cd runtime && ../$(srcdir)/runtime/configure --build=`../$(srcdir)/config.guess` --host=@target_alias@ @runtime_configure_opt@
+
+
+#
+# ruels for 'test' subdir
+#
+prepare-test: test/config.status test/Makefile
+
+ifneq '$(enable_reautoconf)' 'no'
+$(srcdir)/test/configure: $(srcdir)/test/configure.ac $(srcdir)/test/aclocal.m4
+	cd '$(srcdir)/test' && autoconf
+endif
+
+test/Makefile: $(srcdir)/test/Makefile.in test/config.status
+	cd test && ./config.status
+test/config.status: Makefile $(srcdir)/test/configure
+	$(MKDIR_P) test
+	$(MAKE) run-test-configure-$(build_cross_compiler)
+
+run-test-configure-native:
+	cd test && ../$(srcdir)/test/configure @test_configure_opt@
+run-test-configure-cross:
+	cd test && ../$(srcdir)/test/configure --build=`../$(srcdir)/config.guess` --host=@target_alias@ @test_configure_opt@
+test: all
+	$(MAKE) -C test
+
+install:
+	mkdir -p $(destdir)$(bindir)
+	mkdir -p $(destdir)$(libfsctargetdir)
+	sed -r -e 's/^(..*### INSTALL_REMOVE)$$/# \1/' \
+	       -e 's!^#(..*)\%basedir\%(.*)### *( INSTALL_ADD)$$!\1'\''$(libfscdir)'\''\2###\3!' \
+	       -e 's!^#(..*)### *( INSTALL_ADD)$$!\1###\2!' \
+	       $(srcdir)/driver/fscc >$(destdir)$(bindir)/fscc
+	chmod 755 $(destdir)$(bindir)/fscc
+	install -d $(destdir)$(libfsctargetdir)/compiler
+	install compiler/trans.bc compiler/link.bc compiler/fscw.bc $(destdir)$(libfsctargetdir)/compiler
+	if test -f compiler/trans.nc; then \
+	  install compiler/trans.nc compiler/link.nc compiler/fscw.nc $(destdir)$(libfsctargetdir)/compiler; \
+	else \
+	  true; \
+	fi
+	install -m 0644 runtime/fscc.conf $(destdir)$(libfsctargetdir)
+	install -d $(destdir)$(libfsctargetdir)/tools
+	install -m 0755 tools/read-elf-section $(destdir)$(libfsctargetdir)/tools
+	install -m 0755 $(srcdir)/tools/embedded-c/ec $(destdir)$(libfsctargetdir)/tools
+	if test -f "$(srcdir)/VERSION"; then \
+	  install "$(srcdir)/VERSION" $(destdir)$(libfsctargetdir)/VERSION; \
+	else \
+	  $(srcdir)/tools/disthelpers/get-version-number.sh -src "$(srcdir)" -print > $(destdir)$(libfsctargetdir)/VERSION; \
+	fi
+	$(MAKE) -C runtime install-runtime libfsctargetdir=$(libfsctargetdir)
+#	$(MAKE) -C $(buildarchdir) install prefix="$(libfsctargetdir)"
+	(cd $(destdir)$(libfsctargetdir) && rm -rf include)
+	cp -r $(buildarchdir)/include $(destdir)$(libfsctargetdir)/include
+#	# remove old files
+	-rm -f $(destdir)$(libfsctargetdir)/compiler/trans
+	-rm -f $(destdir)$(libfsctargetdir)/compiler/link
+
+clean:
+	if test -d runtime && test -f runtime/Makefile ; then \
+	  $(MAKE) clean -C runtime ; \
+	fi
+	$(MAKE) clean -C doc
+	$(MAKE) clean -C linker
+	$(MAKE) clean -C trans
+	$(MAKE) clean -C fscw
+	test ! -f test/Makefile || $(MAKE) clean -C test
+	rm -rf include
+	rm -rf $(buildarchdir)
+	rm -rf compiler
+	rm -rf docs
+
+clean-compiler:
+	$(MAKE) clean -C linker
+	$(MAKE) clean -C trans
+	$(MAKE) clean -C fscw
+	rm -rf compiler
+
+distclean:
+	$(MAKE) clean
+	if test -d runtime && test -f runtime/Makefile ; then \
+	  $(MAKE) distclean-sub -C runtime ; \
+	fi
+	$(MAKE) distclean-sub -C doc
+	$(MAKE) distclean-sub -C linker
+	$(MAKE) distclean-sub -C trans
+	$(MAKE) distclean-sub -C parser
+	$(MAKE) distclean-sub -C common
+	$(MAKE) distclean-sub -C fscw
+	if test -f test/Makefile; then $(MAKE) distclean-sub -C test; fi
+	$(MAKE) distclean-sub -C local-packaging/debian-dir -f Makefile.clean
+	$(MAKE) distclean-sub-top -f local-packaging/debian-dir/Makefile.clean
+	rm -f tools/read-elf-section
+	rm -f config.log config.status Makefile Makefile.ocamlc-common
+	rm -rf autom4te.cache arch/template/autom4te.cache test/autom4te.cache
+
+really-distclean:
+	test ! -f Makefile || $(MAKE) distclean
+	rm -f local-packaging/debian-dir/MAINTAINER debian
+
+doc: htdoc
+
+.PHONY: doxygen htdoc
+doxygen: make-arch-dir
+	make -C doc doxygen
+
+htdoc: build-compiler
+	make -C doc htdoc

@@ -1,0 +1,39 @@
+/* -*- C -*- */
+
+%% C-PROLOGUE
+#include <ulimit.h>
+#include <errno.h>
+
+%% FSC-PROLOGUE
+#include <ulimit.h>
+
+%% REQUIRED-DECLS
+require_function ulimit;
+
+%% NATIVE-IMPLEMENTATION
+
+/**
+ * @fn long ulimit(int cmd, ...)
+ * @brief control process limits
+ *
+ * @author Lepidum Co., Ltd.
+ */
+fscw_long fscw_ulimit(fscw_int_param(cmd), fscw_pointer_param(arg))
+{
+  long ret, arg0;
+  switch (cmd) {
+  case UL_GETFSIZE:
+    ret = ulimit(UL_GETFSIZE);
+    break;
+  case UL_SETFSIZE:
+    arg0 = int_of_value(read_word(arg_base, arg_ofs));
+    ret = ulimit(UL_SETFSIZE, arg0);
+    break;
+  default:
+    ret = -1;
+    errno = EINVAL;
+    break;
+  }
+  fsc_va_end_base_ofs(arg_base, arg_ofs);
+  return fscw_long_wrap(ret);
+}

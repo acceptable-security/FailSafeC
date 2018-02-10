@@ -1,0 +1,10 @@
+/* -*- C -*- */
+
+%% C-PROLOGUE
+#include <fcntl.h>
+
+%% FSC-PROLOGUE
+#include <fcntl.h>
+%% REQUIRED-DECLS
+auto_generate creat;
+%% NATIVE-IMPLEMENTATION

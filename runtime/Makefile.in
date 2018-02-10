@@ -1,0 +1,77 @@
+# 
+# Part of Fail-Safe C Runtime. Produced by Yutaka Oiwa.
+# (c) 2001-2005 Yutaka Oiwa.
+# (c) 2005-2006 AIST.
+# 
+# This file is written by Yutaka Oiwa in 2003-2005.
+# 
+# This file is distributed under Apache License 2.0 with a special exception.
+# See the file LICENSE contained in the distribution.
+# 
+# 
+
+srcdir = @srcdir@
+builddir = @builddir@
+top_srcdir = @top_srcdir@
+top_builddir = @top_builddir@
+
+LIB_SUBDIR =
+ALL_SUBDIR = stdlib libs
+
+LIB_NAME = fsc_runtime
+OBJ_NAMES = primitive_ops typeinfo fsc_error fsc_alloc \
+	wrapper_helper fsc_debug funcptr nullptr_handler \
+	lazytype copydata fsc_addbase remainder \
+	fsc_safebuf fsc_stackrec fsc_setjmp_handle fsc_mman
+INCLUDE = 
+
+include $(top_builddir)/Makefile.runtime.rules
+
+all: fscc.conf ../tools/read-elf-section include-header fsc_autoconf.h_stamp opt-lib debug-lib all-subdir
+
+fscc.conf: $(srcdir)/fscc.conf.in config.status
+	./config.status
+fsc_autoconf.h_stamp: $(srcdir)/fsc_autoconf.h.in config.status
+	./config.status && touch $@
+../tools/read-elf-section: $(srcdir)/../tools/read-elf-section.in config.status
+	./config.status
+
+include-header:
+	if test "$(srcdir)" != "$(builddir)"; then \
+		rm -f $@ *.h *_inline.c && \
+		$(LN_S) $(srcdir)/include-header $@ && \
+		$(LN_S) $(srcdir)/*.h . && \
+		$(LN_S) $(srcdir)/*_inline.c . ; \
+	fi
+
+install-runtime:
+	test -d "$(destdir)$(libfsctargetdir)"
+	install -d $(destdir)$(libfsctargetdir)/runtime
+	install -d $(destdir)$(libfsctargetdir)/runtime/stdlib
+	install -d $(destdir)$(libfsctargetdir)/runtime/libs
+	install -m 644 fsc_runtime.*.a $(destdir)$(libfsctargetdir)/runtime
+	install -m 644 stdlib/fsc_stdlib.*.a $(destdir)$(libfsctargetdir)/runtime/stdlib
+	install -m 644 *.h *_inline.c include-header $(destdir)$(libfsctargetdir)/runtime
+	install -m 644 stdlib/stdlib.manifest $(destdir)$(libfsctargetdir)/runtime/stdlib
+	install -m 644 stdlib/fsc_stdlib.h $(destdir)$(libfsctargetdir)/runtime/stdlib
+	install -m 644 stdlib/ctype_inline.c $(destdir)$(libfsctargetdir)/runtime/stdlib
+	install -m 644 stdlib/stdlib_int_inline.c $(destdir)$(libfsctargetdir)/runtime/stdlib
+	install -m 644 $(srcdir)/stdlib/private_storage.h $(destdir)$(libfsctargetdir)/runtime/stdlib
+	install -m 644 libs/lib*.opt.a libs/lib*.debug.a $(destdir)$(libfsctargetdir)/runtime/libs
+
+distclean-sub::
+	rm -f fscc.conf fsc_autoconf.h fsc_autoconf.h_stamp config.log config.status
+	rm -f Makefile.runtime.rules
+	rm -rf autom4te.cache
+
+primitive_ops.$(O): $(srcdir)/byteorder_defs.h $(srcdir)/type_repr.h $(srcdir)/typeinfo.h $(srcdir)/fsc_error.h $(srcdir)/block.h
+primitive_ops.$(O): $(srcdir)/primitive_ops.h $(srcdir)/type_repr_inline.c
+repr_test.$(O):     $(srcdir)/type_repr.h $(srcdir)/byteorder_defs.h
+typeinfo.$(O):      $(srcdir)/typeinfo.h $(srcdir)/type_repr.h $(srcdir)/byteorder_defs.h $(srcdir)/primitive_ops.h $(srcdir)/block.h
+fsc_error.$(O):     $(srcdir)/typeinfo.h $(srcdir)/type_repr.h $(srcdir)/byteorder_defs.h $(srcdir)/primitive_ops.h $(srcdir)/block.h
+fsc_alloc.$(O):     $(srcdir)/fsc_vararg.h $(srcdir)/fsc_alloc_inline.c
+fsc_error.$(O):     $(srcdir)/fsc_runtime.h
+fsc_addbase.$(O):   $(srcdir)/fsc_runtime.h $(srcdir)/primitive_ops.h
+funcptr.$(O):       $(srcdir)/funcptr_inline.c
+fsc_stackrec.$(O):  $(srcdir)/fsc_stackrec.h
+fsc_setjmp_handle.$(O):  $(srcdir)/fsc_stackrec.h

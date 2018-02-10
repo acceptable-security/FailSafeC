@@ -1,0 +1,19 @@
+================
+Runtime debugging features
+================
+
+Binaries compiled with -g option will refer the environment variable
+FSC_DEBUG_RUNTIME.  Each characters in the variable will enable
+a specific debugging log.
+
+Current set of debugging features are as follows:
+
+a	memory allocator
+t	memory type guessing
+S	signal handlers, signal-assisted null pointer handler
+s	stack unwinding management
+v	varargs
+m	access Methods (huge output!)
+M	memory-mapped regions (mmap, shm)
+e	environ treatment
+l	other library debug messages

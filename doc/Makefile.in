@@ -1,0 +1,30 @@
+all:
+
+Makefile: Makefile.in ../config.status
+	(cd ..; ./config.status)
+
+../config.status: ../configure
+	$(MAKE) -C .. config.status
+
+.PHONY: htdoc
+
+SRCS=$(shell ls ../common/*.cmi ../parser/*.cmi ../trans/*.cmi ../linker/*.cmi | sed -e 's/cmi$$/mli/' | xargs ls 2>/dev/null) \
+	 ../parser/c_parser.ml
+
+htdoc: $(SRCS)
+	rm -rf caml-html
+	mkdir caml-html
+	ocamlfind ocamldoc -sort -v \
+	  -intro fsc-internal.odoc -html \
+	  -I ../common -I ../parser -I ../trans -I ../linker \
+	  -d caml-html \
+	  $(SRCS)
+
+doxygen:
+	(cd .. && doxygen doc/doxygen.conf)
+
+clean:
+	rm -rf caml-html doxygen
+
+distclean-sub:
+	rm -f Makefile

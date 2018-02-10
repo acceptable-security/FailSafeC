@@ -1,0 +1,146 @@
+/* -*- C -*- */
+
+%% C-PROLOGUE
+#define _XOPEN_SOURCE 500
+#include <sys/stat.h>
+
+%% FSC-PROLOGUE
+#include <sys/stat.h>
+
+%% REQUIRED-DECLS
+
+auto_generate chmod;
+auto_generate fchmod;
+auto_generate umask;
+auto_generate mkfifo;
+auto_generate mknod;
+
+require_function stat;
+require_function fstat;
+require_function lstat;
+
+struct stdlib_stat;
+typedef dev_t;
+typedef ino_t;
+typedef mode_t;
+typedef nlink_t;
+typedef uid_t;
+typedef gid_t;
+typedef off_t;
+typedef time_t;
+typedef blksize_t;
+typedef blkcnt_t;
+
+%% NATIVE-IMPLEMENTATION
+
+static void wrap_stat(fscw_struct_stdlib_stat *aDst, const struct stat *aSrc)
+{
+  fscw_dev_t_wrap_write  (fscw_dev_t_member  (aDst, st_dev),   aSrc->st_dev);
+  fscw_ino_t_wrap_write  (fscw_ino_t_member  (aDst, st_ino),   aSrc->st_ino);
+  fscw_mode_t_wrap_write (fscw_mode_t_member (aDst, st_mode),  aSrc->st_mode);
+  fscw_nlink_t_wrap_write(fscw_nlink_t_member(aDst, st_nlink), aSrc->st_nlink);
+  fscw_uid_t_wrap_write  (fscw_uid_t_member  (aDst, st_uid),   aSrc->st_uid);
+  fscw_gid_t_wrap_write  (fscw_gid_t_member  (aDst, st_gid),   aSrc->st_gid);
+  fscw_dev_t_wrap_write  (fscw_dev_t_member  (aDst, st_rdev),  aSrc->st_rdev);
+  fscw_off_t_wrap_write  (fscw_off_t_member  (aDst, st_size),  aSrc->st_size);
+
+  fscw_time_t_wrap_write(fscw_time_t_member(aDst, st_atime), aSrc->st_atime);
+  fscw_time_t_wrap_write(fscw_time_t_member(aDst, st_mtime), aSrc->st_mtime);
+  fscw_time_t_wrap_write(fscw_time_t_member(aDst, st_ctime), aSrc->st_ctime);
+
+  fscw_blksize_t_wrap_write(fscw_blksize_t_member(aDst, st_blksize), aSrc->st_blksize);
+  fscw_blkcnt_t_wrap_write (fscw_blkcnt_t_member (aDst, st_blocks),  aSrc->st_blocks);
+}
+
+
+/**
+ * @fn int fstat(int fd, struct stat *buf)
+ * @brief retrieve file status information.
+ * @param fd file descriptor to examine.
+ * @param buf result stored here.
+ * @retval 0 success.
+ * @retval -1 error occured.
+ *
+ * @crashcase illegal pointer, buffer overflow
+ * @fsctype atomic, struct(atomic+)
+ *
+ * @author Lepidum Co., Ltd.
+ */
+fscw_int fscw_fstat(fscw_int_param(aFd),
+                    fscw_pointer_param(aBuf))
+{
+  struct stat buf;
+  int ret;
+
+  ret = fstat(aFd, &buf);
+  if(ret == 0){
+    fscw_struct_stdlib_stat tmp;
+    wrap_stat(&tmp, &buf);
+    fscw_struct_stdlib_stat_write_pointer_param(aBuf, 0, tmp);
+  }
+  return fscw_int_wrap(ret);
+}
+
+/**
+ * @fn int stat(const char *path, struct stat *buf)
+ * @brief retrieve file status information.
+ * @param path file name to examine.
+ * @param buf result stored here.
+ * @retval 0 success.
+ * @retval -1 error occured.
+ *
+ * @crashcase illegal pointer, buffer overflow, non-terminated string
+ * @fsctype string(ro), struct(atomic+)
+ *
+ * @author Lepidum Co., Ltd.
+ */
+fscw_int fscw_stat(fscw_pointer_param(aPath),
+                   fscw_pointer_param(aBuf))
+{
+  fscw_string_buf path;
+  struct stat buf;
+  int ret;
+
+  path = fscw_string_unwrap_param(aPath, "stat");
+  ret = stat(path.v, &buf);
+  fscw_string_release(path);
+
+  if (ret == 0) {
+    fscw_struct_stdlib_stat tmp;
+    wrap_stat(&tmp, &buf);
+    fscw_struct_stdlib_stat_write_pointer_param(aBuf, 0, tmp);
+  }
+  return fscw_int_wrap(ret);
+}
+
+/**
+ * @fn int lstat(const char *path, struct stat *buf)
+ * @brief retrieve symbolic link status information.
+ * @param path file or symbolic link name to examine.
+ * @param buf result stored here.
+ * @retval 0 success.
+ * @retval -1 error occured.
+ *
+ * @crashcase illegal pointer, buffer overflow, non-terminated string
+ * @fsctype string(ro), struct(atomic+)
+ *
+ * @author Lepidum Co., Ltd.
+ */
+fscw_int fscw_lstat(fscw_pointer_param(aPath),
+                    fscw_pointer_param(aBuf))
+{
+  fscw_string_buf path;
+  struct stat buf;
+  int ret;
+
+  path = fscw_string_unwrap_param(aPath, "lstat");
+  ret = lstat(path.v, &buf);
+  fscw_string_release(path);
+
+  if (ret == 0) {
+    fscw_struct_stdlib_stat tmp;
+    wrap_stat(&tmp, &buf);
+    fscw_struct_stdlib_stat_write_pointer_param(aBuf, 0, tmp);
+  }
+  return fscw_int_wrap(ret);
+}

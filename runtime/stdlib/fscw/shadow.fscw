@@ -1,0 +1,40 @@
+/* -*- C -*- */
+
+%% C-PROLOGUE
+#include <shadow.h>
+
+%% FSC-PROLOGUE
+#include <shadow.h>
+
+%% REQUIRED-DECLS
+struct stdlib_spwd;
+require_function getspnam;
+
+%% NATIVE-IMPLEMENTATION
+
+static void wrap_spwd(fscw_struct_stdlib_spwd *dst, struct spwd *src)
+{
+  fscw_string_wrap_write(fscw_string_member(dst, sp_namp) , src->sp_namp);
+  fscw_string_wrap_write(fscw_string_member(dst, sp_pwdp) , src->sp_pwdp);
+  fscw_long_wrap_write(fscw_long_member(dst, sp_lstchg) , src->sp_lstchg);
+  fscw_long_wrap_write(fscw_long_member(dst, sp_max) , src->sp_max);
+  fscw_long_wrap_write(fscw_long_member(dst, sp_warn) , src->sp_warn);
+  fscw_long_wrap_write(fscw_long_member(dst, sp_inact) , src->sp_inact);
+  fscw_long_wrap_write(fscw_long_member(dst, sp_expire) , src->sp_expire);
+  fscw_unsigned_long_wrap_write(fscw_unsigned_long_member(dst, sp_flag) , src->sp_flag);
+}
+
+fscw_pointer fscw_getspnam(fscw_string_param(name))
+{
+  fscw_string_buf buf = fscw_string_unwrap_param(name, "getspnam");
+  struct spwd *p = getspnam(buf.v);
+  fscw_string_release(buf);
+
+  if (p == NULL) {
+    return fscw_pointer_wrap(NULL);
+  } else {
+    fscw_struct_stdlib_spwd *ret = fscw_struct_stdlib_spwd_alloc(1);
+    wrap_spwd(ret, p);
+    return fscw_pointer_wrap(ret);
+  }
+}

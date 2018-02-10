@@ -1,0 +1,75 @@
+/* -*- C -*- */
+
+%% C-PROLOGUE
+#include <netinet/in.h>
+
+static uint8_t *s6_addr_of_in6_addr(struct in6_addr *p)
+{
+  return &p->s6_addr[0];
+}
+#undef s6_addr
+
+#define __IN_CLASSA(a) IN_CLASSA(a)
+#define __IN_CLASSB(a) IN_CLASSB(a)
+#define __IN_CLASSC(a) IN_CLASSC(a)
+#define __IN_CLASSD(a) IN_CLASSD(a)
+#define __IN_MULTICAST(a) IN_MULTICAST(a)
+#define __IN_EXPERIMENTAL(a) IN_EXPERIMENTAL(a)
+#define __IN_BADCLASS(a) IN_BADCLASS(a)
+
+%% FSC-PROLOGUE
+#include <netinet/in.h>
+
+%% REQUIRED-DECLS
+auto_generate __IN_CLASSA;
+auto_generate __IN_CLASSB;
+auto_generate __IN_CLASSC;
+auto_generate __IN_CLASSD;
+auto_generate __IN_MULTICAST;
+auto_generate __IN_EXPERIMENTAL;
+auto_generate __IN_BADCLASS;
+
+struct stdlib_in6_addr;
+
+require_function __IN6_IS_ADDR_UNSPECIFIED;
+require_function __IN6_IS_ADDR_LOOPBACK;
+require_function __IN6_IS_ADDR_LINKLOCAL;
+require_function __IN6_IS_ADDR_SITELOCAL;
+require_function __IN6_IS_ADDR_V4MAPPED;
+require_function __IN6_IS_ADDR_V4COMPAT;
+require_function __IN6_IS_ADDR_MC_NODELOCAL;
+require_function __IN6_IS_ADDR_MC_LINKLOCAL;
+require_function __IN6_IS_ADDR_MC_SITELOCAL;
+require_function __IN6_IS_ADDR_MC_ORGLOCAL;
+require_function __IN6_IS_ADDR_MC_GLOBAL;
+
+typedef uint8_t;
+
+%% NATIVE-IMPLEMENTATION
+
+#define GEN_IN6_IS_ADDR(X) \
+     fscw_int fscw___IN6_IS_ADDR_ ## X(fscw_pointer_param(p)) {    \
+       struct in6_addr a;                                          \
+       fscw_struct_stdlib_in6_addr fa;                             \
+       fscw_uint8_t (*pa)[16];                                     \
+       int i;                                                      \
+                                                                   \
+       fa = fscw_struct_stdlib_in6_addr_read_pointer_param(p, 0);  \
+       pa = fscw_uint8_t_member(&fa, s6_addr);                     \
+       for (i = 0; i < 16; i++) {                                  \
+         s6_addr_of_in6_addr(&a)[i] = fscw_uint8_t_unwrap((*pa)[i]); \
+       }                                                           \
+       return IN6_IS_ADDR_ ## X(&a);                               \
+     }
+
+GEN_IN6_IS_ADDR(UNSPECIFIED);
+GEN_IN6_IS_ADDR(LOOPBACK);
+GEN_IN6_IS_ADDR(LINKLOCAL);
+GEN_IN6_IS_ADDR(SITELOCAL);
+GEN_IN6_IS_ADDR(V4MAPPED);
+GEN_IN6_IS_ADDR(V4COMPAT);
+GEN_IN6_IS_ADDR(MC_NODELOCAL);
+GEN_IN6_IS_ADDR(MC_LINKLOCAL);
+GEN_IN6_IS_ADDR(MC_SITELOCAL);
+GEN_IN6_IS_ADDR(MC_ORGLOCAL);
+GEN_IN6_IS_ADDR(MC_GLOBAL);

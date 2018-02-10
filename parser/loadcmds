@@ -1,0 +1,14 @@
+(* -*- caml -*- *)
+#directory "../common";;
+open Ctt_abstree;;
+open Big_int;;
+open Parser_loadup;;
+#install_printer print_bigint;;
+#install_printer print_c_type;;
+#install_printer print_expr;;
+#install_printer print_mexpr;;
+#install_printer print_global_declaration;;
+#install_printer print_global_declarations;;
+#install_printer print_il0;;
+(*#install_printer print_il1;;*)
+#install_printer print_int_set;;

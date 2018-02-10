@@ -1,0 +1,78 @@
+-*- text -*-
+
+** "Undocumented" options for the translator (but documented here :-) **
+
+-fuse-c99-tokens
+
+	Use some part of the C99 features.
+	Currently it enables // comments and hexadecimal float constants.
+	This option may be renamed in future.
+
+-fuse-weak-optimizer
+
+	Use a weaker version of code optimizer (do not emit inlined
+	expressions and use temporary variables for intermediate
+	values.)  May be useful if you need debugging in deep inside
+	the generated code.
+
+	Note that the backend GCC compiler may perform a similar
+	optimization.  For debugging, use -g too.
+
+-faccmeth-expand-limit=<n>
+
+	During generating access methods for structs, expand arrays
+	whose size are at most <n> to a flat code (counted after
+	required separations).  The default is 1.  Possible useful
+	values may be small numbers such as 2 or 3.  Huge value such
+	as 1000000 generates completely flat code for access method.
+
+	The special value n=0 means it uses old, flat code generation.
+
+-fuse-alignpad
+
+	Avoid constant division during virtual-to-real address
+	conversion.  It will add an additional pad area for structs,
+	so that real offsets can be calculated by only binary shifts
+	and multiplications.  Do not mix binaries using/not using
+	this option.
+
+-ftrust-intermodule-struct
+
+	Obsoleted.  Do not use.
+
+	It generates a code which may be linked without FSC-specific
+	linker.  It may generate a broken (crashing) code if there is
+	a tricky type inconsistency between modules.
+	It is not maintained any more and may be broken with some
+	functions in the current standard library.
+
+-fmulti-module
+
+	Use Fail-Safe C linker.  Now this is the default.
+
+-fstdlib-implementation.
+
+	STILL UNDOCUMENTED. NOT TO USE :-)
+
+	In fact, the translator generates a code which differs
+	slightly from the usual usage.  It must be used only when you
+	are building the Fail-Safe C standard library
+	(fsc_stdlib.*.a).
+
+	The current effects are:
+	  - Not generating stub functions (FG_*).
+	  - Accepting only explicitly-named structs ("named" attribute).
+	  - Not generating embedded linker type information.
+	Never rely on these behaviors, however, as it may change in future.
+
+	This option will soon be obsoleted, as the linker now treats
+	the standard library almost as the usual libraries.
+
+-ftrust-all-input-files
+
+	ONLY FOR TESTING.  DO NOT USE.
+
+	Treat all input files as like a system headers.  It accepts
+	several Fail-Safe C-specific attributes in the program code.
+	Incorrect use of this option may lead to generate non-linkable
+	object files.

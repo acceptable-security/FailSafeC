@@ -1,0 +1,46 @@
+srcdir = @srcdir@
+builddir = @builddir@
+top_srcdir = @top_srcdir@
+top_builddir = @top_builddir@
+
+LIBS = libfsc libndbm libmmap_slow
+
+all:
+
+define make_targets
+.PHONY: $1_opt $1_debug clean_$1
+$1_opt-lib:
+	$(MAKE) -C $1 opt-lib
+	ln -sf $1/$1.opt.a .
+
+$1_debug-lib:
+	$(MAKE) -C $1 debug-lib
+	ln -sf $1/$1.debug.a .
+
+clean_$1:
+	$(MAKE) -C $1 clean
+	rm -f $1/$1.*.a $1.*.a
+
+distclean-sub_$1:
+	$(MAKE) -C $1 distclean-sub
+endef
+
+$(foreach lib,$(LIBS),$(eval $(call make_targets,$(lib))))
+
+all:	opt-lib debug-lib
+
+opt-lib:   $(LIBS:%=%_opt-lib)
+
+debug-lib: $(LIBS:%=%_debug-lib)
+
+
+
+clean:	$(LIBS:%=clean_%)
+
+distclean-sub: $(LIBS:%=distclean-sub_%)
+	rm -f Makefile
+
+MAKEFILE = Makefile
+
+$(MAKEFILE): $(srcdir)/$(MAKEFILE).in $(top_builddir)/config.status
+	cd $(top_builddir) && ./config.status

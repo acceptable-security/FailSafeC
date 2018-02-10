@@ -1,0 +1,29 @@
+-*- text -*-
+
+Current implementation of mmap-related functions in Fail-Safe C:
+
+
+1. limitations common to several implementations.
+
+ * mapping to a fixed address is only allowed when the specified
+   memory area is inside another memory-mapped memory region by mmap.
+
+ * munmap and mprotect can only be performed inside mmap'ed memory
+   blocks.
+
+(*) shm is not yet implemented.
+
+(*) currently memory-mapped region cannot hold pointer values.
+
+
+
+2. available implementations.
+
+
+ * "Mmap_slow" implementation (-lmmap_slow) uses separated memory format:
+   a FSC pseudo memory block is stored at memory block allocated by
+   GC_malloc.
+   When all pages are unmapped, it will wait for GC collecting the
+   pseudo memory block.  Upon collection a finalizer releases the
+   mapped logical memory to the system.
+

@@ -1,0 +1,29 @@
+Source: failsafec
+Section: devel
+Priority: optional
+Maintainer: Yutaka OIWA <y.oiwa@aist.go.jp>
+Build-Depends: debhelper (>= 4.0.0),
+ ocaml (>= 3.08.3-3) | ocaml-nox (>= 3.08.3-3),
+ camlp4 | ocaml-nox (< 3.10.0-2),
+ ocaml-native-compilers [i386 powerpc],
+ gcc (>= 3.3), ocaml-findlib, libextlib-ocaml-dev,
+ binutils, libgc-dev (>= 6.0), libgdbm-dev, perl (>= 5.8)
+Standards-Version: 3.8.0
+Homepage: https://staff.aist.go.jp/y.oiwa/FailSafeC/index-en.html
+
+Package: failsafec
+Architecture: i386 mipsel arm powerpc
+Depends: ${shlibs:Depends}, gcc (>= 3.3), binutils, libgc-dev (>= 6.0),
+ perl (>= 5.8)
+Description: memory-safe compiler for the full ANSI C language
+ .
+ Fail-Safe C is a memory safe compiler for ANSI-C language.
+ It detects and disallows all unsafe operations, yet conforming to the full 
+ ANSI C standard (including casts and unions) and even supporting many "dirty 
+ tricks" common in many existing programs which do not strictly conform to 
+ the standard.
+ .
+ By using the Fail-Safe C compiler, programmers can easily make their
+ programs safe without performing heavy rewriting or porting of their code.
+ .
+ This package is a Debian-unofficial, locally-built package.

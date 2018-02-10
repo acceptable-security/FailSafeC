@@ -1,0 +1,108 @@
+/* -*- C -*- */
+/* 
+   Part of Fail-Safe C Runtime. Produced by Yutaka Oiwa.
+   (c) 2001-2005 Yutaka Oiwa.
+   (c) 2005-     AIST.
+   (c) 2006	 Lepidum Co. Ltd.
+
+   This file is written by Yutaka OIWA in 2008.
+
+   This file is distributed under Apache License 2.0 with a special exception.
+   See the file LICENSE contained in the distribution.
+*/
+
+%% C-PROLOGUE
+#include <string.h>
+#include <stdlib.h>
+#include <stdio.h>
+
+%% FSC-PROLOGUE
+extern char *getenv(const char *);
+extern void __fsc_set_system_env(const char *);
+extern char **environ;
+
+%% REQUIRED-DECLS
+
+require_function __fsc_set_system_env;
+require_external_function getenv;
+require_external_value environ;
+module_attribute "Force-linking";
+
+%% NATIVE-IMPLEMENTATION
+
+extern char **environ;
+
+void fscw___fsc_set_system_env(fscw_pointer_param(env))
+{
+    fscw_string_buf env = fscw_string_unwrap_param(env, "__fsc_set_system_env");
+    fscw_pointer vp = fscw_getenv(env_base, env_ofs);
+    fscw_string_buf v = { NULL, NULL };
+    
+    if (base_remove_castflag(base_of_ptrvalue(vp)) || ofs_of_ptrvalue(vp))
+	v = fscw_string_get(base_of_ptrvalue(vp), ofs_of_ptrvalue(vp), "__fsc_set_system_env");
+
+#ifdef FSC_DEBUG_RUNTIME
+    if (fsc_debug_flag['e']) {
+	if (v.v)
+	    fprintf(stderr, "setting environ %s to %s\n", env.v, v.v);
+	else 
+	    fprintf(stderr, "setting environ %s to (nil)\n", env.v);
+    }
+#endif
+
+    if (!v.v)
+	unsetenv(env.v);
+    else
+	setenv(env.v, v.v, 1);
+
+    fscw_string_release(env);
+    if (v.v)
+      fscw_string_release(v);
+}
+
+#define STRCACHE_TABLE_SIZE 32
+
+static struct {
+    const char *str;
+    ptrvalue fsc_str;
+} strcache[STRCACHE_TABLE_SIZE] = {{0}};
+
+void fsc_set_system_env(const char *e) {
+    int i;
+    ptrvalue pv = {0};
+
+    /* TODO: atomic when REENTRANT */
+    for(i = 0; i < STRCACHE_TABLE_SIZE; i++) {
+	if (strcache[i].str == 0)
+	    break;
+	if (0 == strcmp(strcache[i].str, e))
+	    break;
+    }
+    if (i >= STRCACHE_TABLE_SIZE)
+	pv = wrapper_make_new_static_string(e); /* table overflow */
+    else if (strcache[i].str)
+	pv = strcache[i].fsc_str;
+    else {
+	pv = strcache[i].fsc_str = wrapper_make_new_static_string(e);
+	strcache[i].str = e;
+    }
+    
+    fscw___fsc_set_system_env(base_of_ptrvalue(pv), ofs_of_ptrvalue(pv));
+}
+
+void fsc_init_system_env(void) {
+    int i, envc;
+    ptrvalue *copied_envp;
+
+    for (envc = 0;; envc++) {
+	if (environ[envc] == NULL) break;
+    }
+
+    copied_envp = (ptrvalue *)fsc_alloc_static_block(&fsc_typeinfo_Pc.val, envc + 1);
+    for(i = 0; i < envc; i++) {
+	copied_envp[i] = wrapper_make_new_static_string(environ[i]);
+    }
+    copied_envp[envc] = ptrvalue_of_base_ofs(0, 0);
+
+    GV_PPc_environ.val.cv = ptrvalue_of_base_ofs((base_t)copied_envp, 0);
+}

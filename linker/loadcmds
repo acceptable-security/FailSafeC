@@ -1,0 +1,7 @@
+#print_length 5000;;
+#directory "../trans";;
+#directory "../parser";;
+open Linker_types;;
+open Parse_typeinfo;;
+open Resolve;;
+(*  f ["../demo/nbench/misc.safe.o"; "../demo/nbench/nbench0.safe.o"; "../demo/nbench/nbench1-typed.safe.o"; "../demo/nbench/emfloat.safe.o"; "../demo/nbench/sysspec.safe.o"; "../demo/nbench/hardware.safe.o"];; *)

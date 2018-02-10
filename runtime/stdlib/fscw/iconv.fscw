@@ -1,0 +1,178 @@
+/* -*- C -*- */
+
+%% C-PROLOGUE
+#include <iconv.h>
+
+%% FSC-PROLOGUE
+#include <iconv.h>
+
+%% REQUIRED-DECLS
+typedef size_t;
+typedef iconv_t;
+
+require_function iconv_open;
+require_function iconv;
+require_function iconv_close;
+
+%% NATIVE-IMPLEMENTATION
+#include <wrapper/fscw_helper.h>
+#include "../private_storage.h"
+
+static const char private_storage_iconv_t_tag[] = "iconv_t";
+
+/**
+ * @fn iconv_t iconv_open(const char *to, const char *from)
+ * @brief create codeset converter
+ *
+ * @author Lepidum Co., Ltd.
+ */
+fscw_iconv_t fscw_iconv_open(fscw_string_param(to),
+                             fscw_string_param(from))
+{
+  fscw_string_buf to_b   = fscw_string_unwrap_param(to, "iconv_open");
+  fscw_string_buf from_b = fscw_string_unwrap_param(from, "iconv_open");
+  iconv_t cd = iconv_open(to_b.v, from_b.v);
+  fscw_string_release(to_b);
+  fscw_string_release(from_b);
+  if (cd != (iconv_t)-1) {
+    base_t ret = alloc_private_storage((void *)cd, private_storage_iconv_t_tag);
+    return fscw_pointer_wrap((void *)ret);
+  } else {
+    return ptrvalue_of_base_ofs(0, ofs_of_base_vaddr(0, -1));
+  }
+}
+
+static char *read_iconv_param(int is_in_param,
+                              fscw_pointer_param(pbuf), fscw_pointer_param(plen),
+                              fscw_string *buf_ret,
+                              size_t *len_ret,
+                              int *len_is_null_ret,
+                              void **to_discard)
+{
+  fscw_string buf = fscw_pointer_wrap(NULL);
+  size_t len = 0;
+  int len_is_null = 1;
+  char *ret = NULL;
+  
+  if (fscw_is_not_null(pbuf)) {
+    buf = fscw_string_read_pointer_param(pbuf, 0);
+  }
+  if (fscw_is_not_null(plen)) {
+    len = fscw_size_t_read_pointer_param(plen, 0);
+    len_is_null = 0;
+  }
+  *to_discard = NULL;
+  if (len > 0 && base_remove_castflag(base_of_ptrvalue(buf)) != 0) {
+    if (is_in_param) {
+      ret = wrapper_get_rawimage(base_of_ptrvalue(buf),
+                                 ofs_of_ptrvalue(buf),
+                                 to_discard,
+                                 len,
+                                 "iconv");
+    } else {
+      ret = wrapper_get_read_buffer(base_of_ptrvalue(buf),
+                                    ofs_of_ptrvalue(buf),
+                                    to_discard,
+                                    len,
+                                    "iconv");
+    }
+  }
+  *buf_ret = buf;
+  *len_ret = len;
+  *len_is_null_ret = len_is_null;
+  return ret;
+}
+
+static void write_iconv_param(int is_in_param,
+                              fscw_pointer_param(pbuf),
+                              fscw_pointer_param(plen),
+                              fscw_string buf,
+                              size_t old_len, size_t new_len,
+                              char *old_s, char *new_s,
+                              void *to_discard)
+{
+  if (fscw_is_not_null(pbuf)) {
+    if (base_remove_castflag(base_of_ptrvalue(buf)) != 0) {
+      fscw_pointer_write_pointer_param(
+        pbuf, 0,
+        ptrvalue_of_base_ofs(base_of_ptrvalue(buf),
+                             ofs_of_ptrvalue(buf) + (new_s - old_s)));
+      if (is_in_param) {
+        wrapper_release_tmpbuf(to_discard);
+      } else {
+        wrapper_writeback_release_tmpbuf(
+          base_of_ptrvalue(buf), ofs_of_ptrvalue(buf), to_discard, new_s - old_s);
+      }
+    }
+  }
+  if (fscw_is_not_null(plen)) {
+    fscw_size_t_write_pointer_param(plen, 0, new_len);
+  }
+}
+
+/**
+ * @fn size_t iconv(iconv_t cd, char **inbuf, size_t *inbuf_size, char **outbuf, size_t *outbuf_size)
+ * @brief convert codeset
+ *
+ * @author Lepidum Co., Ltd.
+ */
+fscw_size_t fscw_iconv(fscw_iconv_t_param(fcd),
+                       fscw_pointer_param(inbuf),
+                       fscw_pointer_param(inbuf_len),
+                       fscw_pointer_param(outbuf),
+                       fscw_pointer_param(outbuf_len))
+{
+  iconv_t cd = (iconv_t)get_private_storage(fcd_base, fcd_ofs, private_storage_iconv_t_tag);
+  fscw_string inb, outb;
+  char *in, *out;
+  void *tin, *tout;
+  size_t in_len, out_len;
+  int in_len_is_null, out_len_is_null;
+  
+  if (cd == (iconv_t)-1) {
+    fsc_raise_error_library(fcd_base, fcd_ofs, ERR_OUTOFBOUNDS, "iconv: already closed");
+  }
+
+  in  = read_iconv_param(1, inbuf_base, inbuf_ofs, inbuf_len_base, inbuf_len_ofs,
+                        &inb, &in_len, &in_len_is_null, &tin);
+  out = read_iconv_param(0, outbuf_base, outbuf_ofs, outbuf_len_base, outbuf_len_ofs,
+                        &outb, &out_len, &out_len_is_null, &tout);
+  {
+    char *in_r = in;
+    char *out_r = out;
+    size_t in_len_r  = in_len;
+    size_t out_len_r = out_len;
+    size_t ret = iconv(cd,
+                       &in_r, in_len_is_null ? NULL : &in_len_r,
+                       &out_r, out_len_is_null ? NULL : &out_len_r);
+    write_iconv_param(1,
+                      inbuf_base, inbuf_ofs, inbuf_len_base, inbuf_len_ofs,
+                      inb, in_len, in_len_r, in, in_r, tin);
+    write_iconv_param(0,
+                      outbuf_base, outbuf_ofs, outbuf_len_base, outbuf_len_ofs,
+                      outb, out_len, out_len_r, out, out_r, tout);
+
+    return fscw_size_t_wrap(ret);
+  }
+}
+
+/**
+ * @fn int iconv_close(iconv_t cd)
+ * @brief close codeset converter
+ *
+ * @author Lepidum Co., Ltd.
+ */
+fscw_int fscw_iconv_close(fscw_iconv_t_param(fcd))
+{
+  iconv_t cd = (iconv_t)get_private_storage(fcd_base, fcd_ofs, private_storage_iconv_t_tag);
+  int ret;
+  if (cd == (iconv_t)-1) {
+    fsc_raise_error_library(fcd_base, fcd_ofs, ERR_OUTOFBOUNDS, "iconv: already closed");
+  }
+  ret = iconv_close(cd);
+  if (ret == 0) {
+    set_private_storage(fcd_base, fcd_ofs, (iconv_t)-1, private_storage_iconv_t_tag);
+  }
+  return fscw_int_wrap(ret);
+}
+

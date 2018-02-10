@@ -1,0 +1,78 @@
+＊ 構文木の山ほどある型について
+
+string
+
+	↓ C_parser
+
+C_abstree (Ptree): 型無しの C 言語の構文木
+
+	↓ C_typing
+
+CTT: 型付きの C 言語の構文木
+		Expunge_Localstatic, Ctt_reduce_mdarray は CTT → CTT の変換
+
+	↓ Cttm_expunge_assignment
+
+CTTM: CTT のポインタ代入を「MLの :=」風に書き換えたもの。
+	ここまでは平行性は「1つの式の評価順序の任意性」として表現。
+
+	↓ Separate_side_effect
+
+IL0: Goto と単純な命令の列からなるプログラム。データフロー平行命令あり。
+	評価順序が決まっていないCの式は平行プリミティブに変換される。
+
+	↓ Flatten_statement
+
+IL1: IL0 を basic block に分割。
+
+	↓ Classify_local
+
+IL2: IL1 のローカル変数の寿命を判断。併せて関数引数をローカル変数化。
+
+	↓ Il2_reduce_local_variable
+
+IL2: IL2 上で、不要なローカル変数を一時変数化。
+
+	↓ Separate_fatpointer
+
+ILS: IL2 から Fat Pointer の操作を明示的に2命令に分離したもの。
+
+	↓ Ils_ssa_translate
+
+ILS: SSA 中間形式。
+
+	↓ (Dummy_analyzer)
+	↓ Ils_basetype_analysis
+
+ILR: ILS にポインタの範囲などの解析情報を付加したもの。
+
+	↓ Insert_check
+
+ILC: 範囲チェックのための情報を挿入した ILR。
+
+	↓ Translate_to_il3
+	↓ Il3_fixup
+
+IL3: チェックコードを実際に挿入したプログラム。
+
+	↓ Il3_optimize
+
+IL3(B): 不要変数の除去や1つの式にまとめられる計算をまとめた最適化プログラム
+
+	↓ Il3_decompose_ssa (φ関数除去の準備計算)
+	↓ Il3_to_ctt
+	↓     (Cttm_to_ctt: 実際には IL3 → CTT 変換の内部で変換処理が行なわれる。)
+
+
+CTT  : チェックコードを実際のコードに変換
+
+	↓ Ctt_to_ptree
+
+C_abstree (P)
+
+	↓ C_pp
+
+string
+
+
+注

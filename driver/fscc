@@ -1,0 +1,963 @@
+#!/usr/bin/perl
+# -*- perl -*-
+#
+#   Part of Fail-Safe C Compiler. Produced by Yutaka Oiwa.
+#   (c) 2001-2005 Yutaka Oiwa.
+#   (c) 2005-     AIST.
+#
+#   This file is written by Yutaka Oiwa in 2006.
+
+use File::Basename;
+use File::Temp qw(tempdir);
+use Getopt::Long qw(:config posix_default bundling permute);
+use Cwd 'abs_path';
+use strict 'vars';
+use Safe;
+
+my $script_is_installed = 0;       ### INSTALL_REMOVE
+#my $script_is_installed = 1;      ### INSTALL_ADD
+
+$ENV{'OCAMLRUNPARAM'} ||= "b,l=128M";
+
+my $selfname = abs_path($0);
+my $basename = basename($0);
+my $path = dirname($selfname);
+
+my $topdir = abs_path("$path/.."); ### INSTALL_REMOVE
+my $basedir = $topdir;             ### INSTALL_REMOVE
+#my $basedir = %basedir%;###             INSTALL_ADD
+#my $topdir = "$basedir/default";###     INSTALL_ADD
+
+my $machine = undef;
+
+my $compiler_trans;   # top/compiler/trans
+my $compiler_linker;  # top/compiler/linker
+my $compiler_libs;    # top/libs
+my $compiler_fscw;    # top/compiler/fscw
+
+my $cpp_only = 0;
+my $x_option = 'auto-fsc';
+my @fopts = ();
+my $output = undef;
+my @includes = ();
+my @libdirs = ();
+my @defines = ();
+my @linker_options = ();
+my @native_compiler_options = ();
+my @targets = ();
+my $safec_only = 0;
+my $compile_only = 0;
+my $compile_only_asm = 0;
+my $save_temps = 0;
+my $use_fsc_suffix = 0;
+my $keep_temp_dir = 0;
+my $debug_binary = 0;
+my $debug_compiler = undef;
+my $emulate = 0;
+my $optimize = undef;
+my $gcc_m_tune = undef;
+my $gcc_m_arch = undef;
+my $show_cmds = 0;
+my $no_gcc_retry = 0;
+my $stop_at = undef;
+my $profiling = 0;
+my $memorylimit = 256;
+#my $use_ccache = 0;
+#my $use_distcc = 0;
+my $compiletype = '';
+my @dumpspec_options = ();
+my @immediately_invoking_gcc_args = ();
+my $fscc_version = undef;
+my $fscc_revision = undef;
+
+my @gcc_cmd;
+my @gccopts_opt;
+my @gccopts_opt_oflag;
+my @gccopts_debug;
+my @gcclibs_opt;
+my @gcclibs_debug;
+my @gcclibs_native;
+my $gcc_tune_option_type;
+my $gcc_iquote_option_type;
+my @gcc_default_tune_options;
+
+my %ignored_libraries = 
+    ( c => 1,
+      m => 1 );
+
+my %available_compiler_modes =
+    ( "stdlib-implementation" => 0,
+      "trust-intermodule-struct" => 1,
+      "multi-module" => 2,
+      );
+
+my $compiler_mode = undef;
+
+my $workdir = '';
+my %used_filenames = ();
+
+sub load_compiler_config () {
+  return if @gcc_cmd;
+
+  -x "$topdir/compiler/trans.bc" || die "$basename: cannot find compiler $topdir/compiler/trans.bc.\n";
+
+  open CONF, "<$topdir/runtime/fscc.conf" or
+  open CONF, "<$topdir/fscc.conf" or
+    die "$basename: cannot open fscc.conf\n";
+  my $conf = do {local $/; <CONF>};
+  close CONF;
+
+  my $safe = new Safe();
+  $safe->reval($conf);
+  if($@){
+    die "Can't eval fscc.conf: $@";
+  }
+
+  @gcc_cmd        = $safe->reval('@gcc_cmd;');
+  @gccopts_opt_oflag = $safe->reval('@gccopts_opt_oflag;');
+  @gccopts_opt    = $safe->reval('@gccopts_opt;');
+  @gccopts_debug  = $safe->reval('@gccopts_debug;');
+  @gcclibs_native = $safe->reval('@gcclibs_native;');
+  $gcc_tune_option_type = $safe->reval('$gcc_tune_option_type');
+  $gcc_iquote_option_type = $safe->reval('$gcc_iquote_option_type');
+  @gcc_default_tune_options = $safe->reval('@gcc_default_tune_options');
+  $fscc_revision = $safe->reval('$fscc_revision');
+  if(scalar @gcc_cmd == 0){
+    die 'broken fscc.conf: @gcc_cmd not specified.';
+  }
+
+  @gccopts_opt   = ("-I${topdir}/runtime", @gccopts_opt);
+  @gccopts_debug = ("-I${topdir}/runtime", @gccopts_debug);
+
+  @gcclibs_opt =  ("${topdir}/runtime/stdlib/fsc_stdlib.opt.a",
+                   "${topdir}/runtime/fsc_runtime.opt.a");
+  @gcclibs_debug = ("${topdir}/runtime/stdlib/fsc_stdlib.debug.a",
+                    "${topdir}/runtime/fsc_runtime.debug.a");
+
+  $compiler_trans   = "$topdir/compiler/trans";
+  $compiler_linker  = "$topdir/compiler/link";
+  $compiler_libs    = "$topdir/runtime/libs";
+  $compiler_fscw    = "$topdir/compiler/fscw";
+
+  if (open VERSION, "<$topdir/VERSION") {
+      chomp ($fscc_version = <VERSION>);
+      close VERSION;
+  }
+  unless (defined $fscc_version) {
+      $fscc_version = "$fscc_revision (in development tree)";
+  }
+}
+
+sub make_intermediate_filename ( $$ ) {
+    my ($base, $ext) = @_;
+    my $n = 1;
+    my $cand;
+    if ($save_temps) {
+	return "$base.$ext";
+    } else {
+	die unless $workdir;
+	if (defined $ext) {
+	    $cand = "$workdir$base.$ext";
+	    while (-f $cand) {
+		$cand = "$workdir$base._${n}_.$ext";
+		$n++;
+	    }
+	} else {
+	    $cand = "$base";
+
+	    for(;;) {
+		# checks for overwriting
+		opendir DIR, "$workdir" or die "opendir $workdir: $!";
+		my $found;
+		while (defined (my $f = readdir DIR)) {
+#		    print STDERR ">>$f<< ";
+		    if (substr($f,0,length($cand)) eq $cand) {
+#			print STDERR "(found)";
+			$found = 1;
+			last;
+		    }
+		}
+		closedir DIR;
+#		print STDERR "\n";
+
+		last unless $found;
+
+		$cand = "$base._${n}_";
+		$n++;
+	    }
+
+	    $cand = "$workdir$cand";
+	}
+	return $cand;
+    }
+}
+
+sub shell_quote ($) {
+    local $_ = $_[0];
+
+    return "\"\"" if $_ eq '';
+    return $_ if /\A[\w\d-.@\/=+]+\z/;
+    s/\'/\'\\\'\'/g;
+    return "'" . $_ . "'";
+}
+
+sub shell_quote_args (@) {
+    join(" ", map { shell_quote $_ } @_);
+}
+
+sub do_cmd_try ($$@) {
+    my $redirect = shift;
+    my $memlimit = shift;
+    if ($emulate) {
+	print STDERR shell_quote_args (@_), "\n";
+	return (0, "");
+    } elsif ($redirect) {
+	print STDERR "+ ", shell_quote_args (@_), "\n" if $show_cmds;
+	my $pid = open(S, "-|");
+	die "cannot fork: $!" unless defined $pid;
+
+	if ($pid) {
+	    local $/;
+	    my $str = <S>;
+	    close S;
+	    return ($?, $str);
+	} else {
+	    set_memory_limit($memlimit) if $memlimit > 0;
+	    open(STDERR, ">&STDOUT");
+	    exec { $_[0] } (@_) or die "cannot execute $_[0]: $!";
+	}
+    } else {
+	print STDERR "+ ", shell_quote_args (@_), "\n" if $show_cmds;
+	my $pid = fork;
+	die "cannot fork" unless defined $pid;
+
+	if ($pid) {
+	    waitpid $pid, 0;
+	    return ($?, "");
+	} else {
+	    set_memory_limit($memlimit) if $memlimit > 0;
+	    exec { $_[0] } (@_) or die "cannot execute $_[0]: $!";
+	}
+    }
+}
+
+sub do_cmd (@) {
+    do_cmd_memlimit(0, @_);
+}
+
+sub do_cmd_memlimit ($@) {
+    my $memlimit = shift;
+
+    my ($stat, $mes) = do_cmd_try(0, $memlimit, @_);
+    if ($stat) {
+	print STDERR "+ ", shell_quote_args (@_), "\n" unless $show_cmds;
+	print STDERR $mes;
+	if ($stat & 255) {
+	    printf STDERR "$basename: command $_[0] terminated with signal %d\n", 
+	    ($stat & 127);
+	} else {
+	    printf STDERR "$basename: command $_[0] returned status %d\n", ($? >> 8);
+	    }
+	exit 1;
+    } else {
+	print $mes;
+    }
+}
+
+{
+    my @possible_oflags;
+    my $inited;
+
+    sub get_oflags_candidates () {
+	return @possible_oflags if ($inited);
+	my @l;
+	my $max;
+	my $debug = -1;
+	local $_;
+
+	foreach (@gccopts_opt_oflag) {
+	    $max = $1 + 0 if /^-O(\d)$/;
+	    $max = 0 if /^-O$/;
+	    $debug = 1 if $_ eq '-g';
+	}
+	if (defined $max && defined $optimize && $optimize < $max) {
+	    $max = ($optimize ? $optimize : undef);
+	}
+	
+	if (!defined $max) {
+	    unshift @l, ['-g'] if $debug;
+	    unshift @l, [];
+	} elsif ($max == 0) {
+	    unshift @l, ['-O', '-g'] if $debug;
+	    unshift @l, ['-O'];
+	} else {
+	    unshift @l, [qw(-O1)];
+	    unshift @l, [qw(-O1 -g)] if $debug;
+	    unshift @l, [qw(-O2)]    if $max >= 2;
+	    unshift @l, [qw(-O2 -g)] if $max >= 2 && $debug;
+	    if ($max >= 3) {
+		unshift @l, ["-O$max"], ["-O$max", qw(-finline-limit=10)];
+		unshift @l, ["-O$max", qw(-g)], ["-O$max", qw(-finline-limit=10 -g)] if $debug;
+	    }
+	 }
+	@possible_oflags = @l;
+	$inited = 1;
+
+	return @possible_oflags;
+    }
+}
+
+sub do_gcc ($$$$$) {
+    my ($is_debug, $memlimit, $gcccmd, $gccopts, $args) = @_;
+
+    if ($is_debug || $no_gcc_retry) {
+	do_cmd_memlimit($memlimit, @$gcccmd, @$gccopts, @$args);
+    } else {
+	my ($stat, $mes);
+	my @possible_oflags = get_oflags_candidates;
+	local @_;
+	for (my $i = 0; $i < scalar @possible_oflags; $i++)
+	{
+	    my $optopt = $possible_oflags[$i];
+	    my $is_last = $i == $#possible_oflags;
+
+	    @_ = (@$gcccmd, @$gccopts, @$optopt, @$args);
+
+	    printf STDERR "$basename: trying with gcc @{$optopt}\n" unless $i == 0;
+	    ($stat, $mes) = do_cmd_try(1, $memlimit, @_);
+
+	    if ($stat == 0) {
+		printf STDERR "$basename: compilation succeeded with gcc @{$optopt}.\n" unless $i == 0;
+		print STDERR $mes;
+		return;
+	    }
+
+	    last if $is_last;
+
+	    if ($mes =~ /full bug report/) {
+		print STDERR "+ ", shell_quote_args (@_), "\n" unless $show_cmds;
+		printf STDERR "$basename: gcc @{$optopt} caused an internal error. retrying.\n";
+		if ($mes =~ m@Preprocessed source stored into (/tmp/cc[\w\d]+.out) file, please attach this to your bugreport.@) {
+		    my $fname = $1;
+		    if (-f $fname) {
+			open (TOUT, "<$fname");
+			my $str = <TOUT>;
+			close TOUT;
+			if ($str =~ m@\A// ..*cc1@) {
+			    printf STDERR "$basename: removing gcc-generated temporary file $fname.\n";
+			    unlink $fname;
+			}
+		    }
+		}
+		next;
+	    } else {
+		last;
+	    }
+	}
+	print STDERR "+ ", shell_quote_args (@_), "\n" unless $show_cmds;
+	print STDERR $mes;
+	if ($stat & 255) {
+	    printf STDERR "$basename: command $_[0] terminated with signal %d\n", 
+	    ($stat & 127);
+	} else {
+	    printf STDERR "$basename: command $_[0] returned status %d\n", ($? >> 8);
+	}
+	exit 1;
+    }
+}
+
+sub shell_backtick_for_display (@) {
+    my ($shell, $str);
+    my $pid = open ($shell, "-|");
+    return "" unless (defined $pid);
+    if ($pid) {
+	close STDERR;
+	open STDERR, ">/dev/null";
+	local $/;
+	$str = <$shell>;
+	$str =~ s/\s+/ /sg;
+	$str =~ s/ +$//sg;
+	$str =~ s/^ +$//sg;
+    } else {
+	exec @_ or 0;
+	print "";
+	exit 0;
+    }
+    close $shell;
+    return $str;
+}
+
+sub parse_Bb_option ($$) {
+  my ($b, $opt) = @_;
+  if ($b =~ /b/) {
+    $machine = $opt;
+  } else {
+    #if (! $script_is_installed) {
+    #  die "$basename: -B option is not supported.\n";
+    #}
+    my $path = abs_path($opt);
+    (defined $path && -d $path) or die "$basename: $path: no such directory.\n";
+    $basedir = $path;
+  }
+  if ($script_is_installed) {
+    $topdir = "$basedir/default";
+    $topdir = "$basedir/$machine" if defined($machine);
+  } else {
+    $topdir = $basedir;
+    $topdir = "$basedir/BUILD/$machine" if defined($machine);    
+  }
+}
+
+sub parse_W_option ($$) {
+    local (undef, $_) = @_;
+    if (/^l,(..*)/) {
+	push @linker_options, (split (/,/, $1));
+    } elsif (/^c,(..*)/) {
+	push @native_compiler_options, (split (/,/, $1));
+    } else {
+	printf STDERR "$basename: unknown option -W$_\n";
+	exit 1;
+    }
+}
+
+sub parse_m_option ($$) {
+    local (undef, $_) = @_;
+    if (/^arch=(..*)/) {
+	$gcc_m_arch=$1;
+    } elsif (/^(cpu|tune)=(..*)/) {
+	$gcc_m_tune=$2;
+    } elsif (/^[34]86$/) {
+	$gcc_m_tune="i$_";
+    } elsif (/^pentium(pro)?$/) {
+	$gcc_m_tune=$_;
+    } else {
+	print STDERR "$basename: unknown option -m$_\n";
+	exit 1;
+    }
+}
+
+sub parse_f_option ($$) {
+    local (undef, $_) = @_;
+    if (exists $available_compiler_modes{$_}) {
+	if ($compiler_mode && $_ ne $compiler_mode) {
+	    die "-f$_ conflicts with -f$compiler_mode";
+	} else {
+	    $compiler_mode = $_;
+	}
+    } else {
+	push @fopts, $_;
+    }
+}
+
+sub parse_l_option ($$) {
+    local (undef, $_) = @_;
+    my (@l) = @libdirs;
+    my $l = \@l;
+    push @targets, ["-l", $_, $l];
+}
+
+sub parse_misc_option ($$) {
+    my $opt = "-$_[0]$_[1]";
+    if ($opt eq '-dumpmachine') {
+	if (!@immediately_invoking_gcc_args) {
+	    @immediately_invoking_gcc_args = ("$opt");
+	}
+	return;
+    }
+    die "invalid option $opt";
+}
+
+sub parse_file_option ($) {
+    local ($_) = @_;
+    push @targets, ["<>", $_, $x_option];
+}
+
+sub examine_fileargs () {
+    my @l = @targets;
+    @targets = ();
+
+  FILELOOP:
+    foreach my $f (@l) {
+	if (ref($f) eq "ARRAY") {
+	    my @a = @$f;
+	    if ($a[0] eq "-l") {
+                # library
+		my $f = $a[1];
+		my $l = $a[2];
+		my @ldirs = @$l;
+		foreach my $dir (@ldirs, $compiler_libs) {
+#		    print STDERR "searching -l$f in dir: $dir\n";
+		    foreach my $fname ("$dir/lib$f.$compiletype.a", "$dir/lib$f.a") {
+#			print STDERR ">>$fname\n";
+			if (-f $fname) {
+			    push @targets, ['link', $fname];
+			    next FILELOOP;
+			}
+		    }
+		}
+		if ($ignored_libraries{$f}) {
+		    next FILELOOP; # -lc and -lm are silently ignored
+		}
+		printf STDERR "$basename: -l$_: cannot find lib$f.a in search path\n";
+		exit 1;
+	    } elsif ($a[0] eq "<>") {
+		my $f = $a[1];
+		my $x = $a[2];
+
+		if ($x eq 'c' || $x eq 'fsc') {
+		    push @targets, ['fsc', $f];
+		} elsif ($x eq 'native-c') {
+		    push @targets, ['native-c', $f];
+                } elsif ($x eq 'fscw') {
+                    push @targets, ['fscw', $f];
+		} elsif ($x eq 'auto' or $x eq 'none' or $x eq 'auto-fsc' | $x eq 'auto-native') {
+		    if ($f =~ /\.safe\.c\z/ or ($f =~ /\.c\z/ && $x eq 'auto-native')) {
+			push @targets, ['native-c', $f];
+		    } elsif ($f =~ /\.s?c\z/) {
+			push @targets, ['fsc', $f];
+		    } elsif ($f =~ /\.[ao]\z/) {
+			push @targets, ['link', $f];
+                    } elsif ($f =~ /\.fscw\z/) {
+                        push @targets, ['fscw', $f];
+		    } else {
+			die sprintf "$basename: do not know how to handle %s\n", shell_quote $f;
+		    }
+		} else {
+		    die sprintf("$basename: unknown -x option: -x%s\n", shell_quote $x);
+		}
+	    } else {
+		die;
+	    }
+	} elsif (ref($f)) {
+	    die;
+	} else {
+	    die;
+	}
+    }
+}
+
+sub usage () {
+    load_compiler_config();
+    print STDERR <<"EOF";
+Fail-Safe C $fscc_version
+
+usage: fscc <options> <files>
+
+Driver options:
+
+  -o                 output file
+  -L                 library directory
+  -l                 specify library files
+  --safec-only       stop processing at Fail-Safe C processing
+  -c                 stop processing at Fail-Safe C compilation
+  -S                 stop processing after assembly translation
+  -v                 show each internal commands executed
+  -n                 do not perform any process, just show what will be done
+  -O                 specify optimization level
+  -g                 use debugging code
+  --save-temps       save intermediate files at current directory
+  --keep-temp-dir    keep temporary work directory after processing
+  --use-fsc-suffix   use FSC-specific file suffixes (e.g. *.safe.o instead of *.o)
+  -x[type]           specify types of the following input files
+
+  -Wl,opts           pass options to the native linker
+  -Wc,opts           pass options to the native compiler
+  -march=            specify code-gen. target arch. of the native compiler
+  -mtune=            specify optimization target arch. of the native compiler
+
+  -B                 specify Fail-Safe C base directory
+  -b                 specify target machine
+
+  --version          show compiler version
+
+Fail-Safe C Compiler options:
+EOF
+;
+    exec "$topdir/compiler/trans.bc", "---help-user" or 0;
+    print STDERR " -- cannot execute $topdir/compiler/trans.bc\n";
+    exit 0;
+}
+
+sub version () {
+    load_compiler_config();
+    print "Fail-Safe C $fscc_version\n";
+    
+    if (! -f "$topdir/compiler/trans.bc") {
+	print STDERR " -- compiler binary $topdir/compiler/trans.bc not available\n";
+	exit 1;
+    }
+    printf "  Optimized compiler: %savailable\n", (-f "$topdir/compiler/trans.nc" ? "" : "not ");
+    print "  Translator information:\n";
+    system "$topdir/compiler/trans.bc", "---show-version-info";
+    if ($?) {
+	print STDERR " -- cannot execute $topdir/compiler/trans.bc\n";
+    }
+    printf "\n  Backend information:\n    Backend compiler: %s\n",
+      $gcc_cmd[0];
+    my $gccversion = shell_backtick_for_display(@gcc_cmd, "-dumpversion");
+    if ($gccversion eq '') {
+	$gccversion = "(not available)";
+    }
+    my $gccmachine = shell_backtick_for_display(@gcc_cmd, "-dumpmachine");
+    if ($gccmachine ne '') {
+	$gccmachine = " (for $gccmachine)";
+    }
+    printf "    Version: %s%s\n", $gccversion, $gccmachine;
+    printf "      (see %s --version for more information and copying)\n", $gcc_cmd[0];
+    exit 0;
+}
+
+sub gcc_tuning_options ($) {
+    my ($is_debugging) = @_;
+
+    if (! defined $gcc_m_arch && ! defined $gcc_m_tune) {
+	return () if $is_debugging;
+	return @gcc_default_tune_options;
+    }
+    
+    return "" if ($gcc_tune_option_type eq "");
+
+    if ($gcc_tune_option_type eq "-m") {
+	# gcc only accepts old -m option
+	my $o = $gcc_m_arch || $gcc_m_tune;
+	if ($o =~ /\Apentium(pro)?\z/) {
+	    return ("-m$o");
+	} elsif ($o =~ /\Ai([34]86)?\z/) {
+	    return ("-m$1");
+	} else {
+	    return ();
+	}
+    }
+
+    return ((defined $gcc_m_arch ? "-march=$gcc_m_arch" : ()),
+	    (defined $gcc_m_tune ? "$gcc_tune_option_type$gcc_m_tune" : ()));
+}
+
+sub gcc_iquote_options ($) {
+    my ($srcfile) = @_;
+
+    my $dir = dirname($srcfile);
+
+    if ($gcc_iquote_option_type eq '-iquote') {
+	# gcc have -iquote option. good.
+	return ('-iquote', $dir);
+    } 
+    elsif ($gcc_iquote_option_type eq '-I-') {
+	# It have a side-effect to disable inclusion from current directory.
+	return ("-I", $dir, "-I-");
+    }
+    else {
+	return ("-I", $dir);
+    }
+}
+
+usage if ($ARGV[0] eq '-help');
+
+GetOptions (
+	    'm=s' => \&parse_m_option,
+	    'f=s' => \&parse_f_option,
+	    'd=s' => \&parse_misc_option,
+	    'x=s' => \$x_option,
+	    'o=s' => \$output,
+	    'I=s' => \@includes,
+	    'D=s' => sub { push @defines, ("-D", $_[1]) },
+	    'U=s' => sub { push @defines, ("-U", $_[1]) },
+	    'L=s' => \@libdirs,
+	    'B=s' => \&parse_Bb_option,
+	    'b=s' => \&parse_Bb_option,
+
+	    'E' => \$cpp_only,
+	    'safec-only' => \$safec_only,
+	    'c' => \$compile_only,
+	    'S' => \$compile_only_asm,
+	    'g' => \$debug_binary,
+	    'stop-at=s' => \$stop_at,
+	    'n' => \$emulate,
+	    'O:6' => \$optimize,
+
+	    'show-commands|v' => \$show_cmds,
+
+	    'debug=s' => \$debug_compiler,
+	    'save-temps' => \$save_temps,
+	    'keep-temp-dir' => \$keep_temp_dir,
+	    'use-fsc-suffix' => \$use_fsc_suffix,
+	    'use-profiling' => \$profiling,
+	    'memory-limit=i' => \$memorylimit,
+            'dumpspec=s' => \@dumpspec_options,
+	    'no-gcc-retry' => \$no_gcc_retry,
+	    'gcc-command=s' => sub { @gcc_cmd = split " ", $_[1] },
+
+	    'W=s' => \&parse_W_option,
+	    'l=s' => \&parse_l_option,
+	    '<>' => \&parse_file_option,
+
+	    'help' => \&usage,
+	    'version' => \&version,
+	   ) or exit 1;
+
+map { parse_file_option($_) } @ARGV; # process any arguments after --
+
+load_compiler_config();
+
+if (@immediately_invoking_gcc_args > 0) {
+    exec(@gcc_cmd, @immediately_invoking_gcc_args) or die "cannot execute gcc: $!";
+}
+
+if (scalar(@dumpspec_options) > 0) {
+    my %specs = (systemdir => $topdir,
+                 cc => \@gcc_cmd,
+		 version => $fscc_version);
+    foreach (@dumpspec_options) {
+        if (exists $specs{$_}) {
+	    my $spec = $specs{$_};
+	    if (ref $spec eq "ARRAY") {
+		$spec = shell_quote_args(@$spec);
+	    }
+            print "$spec\n";
+        } else {
+            die "$basename: unknown spec name '$_'.\n";
+        }
+    }
+    exit 0;
+}
+     
+$debug_binary = 0 if $optimize != 0; # -O -g will be treated as requesting a optimization
+
+$compiletype = $debug_binary ? "debug" : "opt";
+
+examine_fileargs();
+
+if (@targets == 0) {
+    die "$basename: no input files\n";
+}
+
+if (($compile_only || $compile_only_asm || $cpp_only) && 
+    defined $output &&
+    (@targets != 1 || ($targets[0][0] ne 'native-c' && $targets[0][0] ne 'fsc' && $targets[0][0] ne 'fscw'))) {
+    die "$basename: when -o is given with -c, -E or -S, only one input file is accepted.\n";
+}
+
+$compiler_mode ||= "multi-module";
+
+if ($available_compiler_modes{$compiler_mode} == 0 &&
+    ! $compile_only && !$compile_only_asm && ! $cpp_only && !$safec_only && !defined $stop_at) {
+    die "mode -f$compiler_mode requires -c or -E option.\n ";
+}
+
+my @fsc_args = ("---systemdir", "$topdir", "-f", $compiler_mode);
+my @fsclink_args = ("---systemdir", "$topdir");
+my @fscw_args = ("---systemdir", "$topdir", "-f", $compiler_mode);
+my @nativec_args = ();
+
+foreach my $i (@includes) {
+  push @fsc_args, ("-I", $i);
+  push @fscw_args, ("-I", $i);
+  push @nativec_args, ("-I$i");
+}
+
+foreach my $i (@fopts) {
+  push @fsc_args, ("-f", "$i");
+}
+
+foreach my $i (@defines) {
+  push @fsc_args, $i;
+  push @fscw_args, $i;
+}
+
+my $dotnc = '.nc';
+
+if (defined $debug_compiler) {
+    if ($debug_compiler) {
+	push @fsc_args, ("--debug", $debug_compiler);
+	push @fsclink_args, ("--debug", $debug_compiler);
+    }
+    foreach $_ (split /,/, $debug_compiler) {
+	/^(\d+(-\d+)?)[.=](\d+)\z/ or die "invalid --debug option: $debug_compiler";
+	$dotnc ='.bc' if ($3 >= 4);
+	# if, for any debug category, the debug level is 4 or above,
+	# use bytecoded runtime.
+    }
+}
+
+# on architecture without native-code OCaml compiler, use bytecode version anyway.
+$dotnc = ".bc" unless (-f "${compiler_trans}.nc" or -f "${compiler_linker}.nc");
+$dotnc = '.ncp' if ($profiling && $dotnc ne ".bc");
+
+if (! $save_temps) {
+    $workdir = tempdir( "fsc-$>-XXXXXXXX", TMPDIR => 1, CLEANUP => !$keep_temp_dir );
+    print STDERR "workdir is $workdir\n" if $keep_temp_dir;
+    $workdir .= '/';
+}
+
+my @objs = ();
+
+foreach (@targets) {
+    my ($type, $file, $typeorig, $fileorig) = @$_;
+    die "$basename: no input file $file\n" unless -f $file;
+    
+    if ($type eq 'fsc') {
+	if ($cpp_only || defined $stop_at) {
+	    my @outfileopt = ();
+	    if (defined $output) {
+		@outfileopt = ("---output-file", "$output");
+	    }
+	    do_cmd ("$compiler_trans$dotnc",
+		    @fsc_args,
+		    ($cpp_only ? "-E" : ("--stop-at", "$stop_at")), 
+		    @outfileopt,
+		    "---input-file", $file);
+	    next;
+	} else {
+	    my $b = basename($file, ".c");
+	    my $outfile = 
+	      $safec_only 
+		? (defined $output ? $output : "$b.safe.c")
+		  : make_intermediate_filename($b, "safe.c");
+	    do_cmd ("$compiler_trans$dotnc",
+		    @fsc_args,
+		    "---output-file", $outfile,
+		    "---input-file", $file);
+	    ($type, $file, $typeorig, $fileorig) = ('native-c', $outfile, $type, $file);
+	    # FALLTHROUGH
+	}
+    }
+    if ($type eq 'fscw') {
+	die "file with .fscw cannot be processed with --stop-at\n" if ($cpp_only || defined $stop_at);
+        my $b = basename($file, ".fscw");
+        my $outfile = 
+          $safec_only 
+            ? (defined $output ? $output : "$b.safe.c")
+            : make_intermediate_filename($b, "safe.c");
+        do_cmd ("$compiler_fscw$dotnc",
+                @fscw_args,
+                "---output-file", $outfile,
+                "---input-file", $file);
+        ($type, $file, $typeorig, $fileorig) = ('native-c', $outfile, $type, $file);
+        # FALLTHROUGH
+    }
+    if ($type eq 'native-c') {
+	die "file with .safe.c cannot be processed with -E nor --stop-at\n" if ($cpp_only || defined $stop_at);
+	next if $safec_only;
+
+	my $generated_p = $typeorig ne '';
+	my $fscw_p = $typeorig eq 'fscw';
+
+#	print STDERR "type=$type, file=$file, typeorig=$typeorig, generated_p = $generated_p\n";
+
+	my $b = basename($file, ($generated_p ? ".safe.c" : ".c"));
+	my $outfile =
+	  (defined $output && $compile_only) ? "$output" :
+	  ($compile_only_asm) ? (($use_fsc_suffix && $generated_p) ? "$b.safe.s" : "$b.s") :
+	  ($compile_only)     ? (($use_fsc_suffix && $generated_p) ? "$b.safe.o" : "$b.o") :
+	    make_intermediate_filename($b, "safe.o");
+	do_gcc ($debug_binary,
+		$memorylimit,
+		\@gcc_cmd,
+		[($fscw_p ? gcc_iquote_options($fileorig) : ()),
+		 $debug_binary ? @gccopts_debug : @gccopts_opt],
+		[(gcc_tuning_options($debug_binary)),
+		 ($generated_p ? () : @nativec_args),
+		 "-o", $outfile, ($compile_only_asm ? "-S" : "-c"),
+		 @native_compiler_options,
+		 "-xc", $file]);
+	push @objs, $outfile;
+	next;
+    }
+    if ($type eq 'link') {
+	push @objs, $file;
+	next;
+    }
+    die "$basename: panic: do not know how to handle $file\n";
+}
+
+if (! $compile_only && !$compile_only_asm && ! $cpp_only && !$safec_only && !defined $stop_at) {
+    $output = "a.out" unless defined $output;
+    my $b = basename($output);
+    my $tempout = make_intermediate_filename($b, undef);
+    if ($available_compiler_modes{$compiler_mode} == 2) {
+	do_cmd ("$compiler_linker$dotnc",
+		@fsclink_args,
+		"-o", $tempout,
+		@objs);
+	do_gcc($debug_binary,
+	       $memorylimit,
+	       [@gcc_cmd],
+	       [$debug_binary ? @gccopts_debug : @gccopts_opt],
+	       [(gcc_tuning_options($debug_binary)),
+		"-c", "-o", "$tempout.linkstub.safe.o", @native_compiler_options,
+		"$tempout.linkstub.safe.c"]);
+	unshift @objs, "$tempout.linkstub.safe.o", "$tempout.linkstub.script";
+	push @objs, "$tempout.linkstub.script2";
+    }
+    do_cmd_memlimit ($memorylimit,
+		     @gcc_cmd, "-o", $output,
+		     ($debug_binary ? @gccopts_debug : @gccopts_opt),
+		     @objs,
+		     ($debug_binary ? @gcclibs_debug : @gcclibs_opt),
+		     @linker_options,
+		     @gcclibs_native
+		     );
+}
+exit 0;
+
+BEGIN {
+    eval { require BSD::Resource; import BSD::Resource; };
+    if ($@) {
+#	print STDERR "fall-back routines for setrlimit used.\n";
+	eval {
+	    require "syscall.ph";
+	    require "sys/resource.ph";
+
+	    *setrlimit = sub ($$$) {
+		my ($resource, $slimit, $hlimit) = @_;
+		my $rlimit = pack "i2", $slimit, $hlimit;
+#		print STDERR "setting $resource to $slimit/$hlimit\n";
+		$! = 0;
+		my $res = syscall &SYS_setrlimit, $resource + 0, $rlimit;
+#		print STDERR "result is $res\n";
+		return ($res == 0);
+	    };
+
+	    my $max1 = ~0;
+	    my $max2 = int ($max1 / 2);
+	    *getrlimit = sub ($) {
+		my ($resource) = @_;
+		my $rlimit = pack "i2", 0, 0;
+#		print STDERR "getting limit for $resource\n";
+		my $res = syscall &SYS_getrlimit, $resource + 0, $rlimit;
+		if ($res != 0) {
+		    return undef;
+		}
+		my ($slimit, $hlimit) = unpack "i2", $rlimit;
+
+		# convert some possible "infty values" to -1;
+		$slimit = -1 if $slimit == $max1 || $slimit == $max2;
+		$hlimit = -1 if $hlimit == $max1 || $hlimit == $max2;
+		return wantarray ? ($slimit, $hlimit) : $slimit;
+	    };
+	};
+	die $@ if $@;
+    }
+}
+
+sub set_memory_limit ($) {
+    my $limit = $_[0] * 1048576;
+
+    my ($slimit, $hlimit) = getrlimit(RLIMIT_AS);
+    if (!defined $slimit) {
+	warn "getrlimit syscall failed: $!. (may be OS-dependent or porting issue for Fail-Safe C)";
+	return;
+    }
+
+    if ($slimit < $limit && $slimit > 0) {
+#	printf STDERR "current soft limit = %d lower than expected %d: truncated.\n", $slimit, $limit;
+	$limit = $slimit;
+    }
+			    
+#    printf STDERR "current limit = %d/%d, limit set to: %d\n", $slimit, $hlimit, $limit;
+
+    setrlimit (RLIMIT_AS, $limit, $hlimit) or do {
+	warn "setrlimit syscall failed: $! (limit values s/h/t=$slimit,$hlimit,$limit).";
+	return;
+    }
+}

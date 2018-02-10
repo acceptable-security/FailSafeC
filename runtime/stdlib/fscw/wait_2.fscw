@@ -1,0 +1,44 @@
+/* -*- C -*- */
+
+%% C-PROLOGUE
+#include <sys/wait.h>
+#undef sa_handler
+#undef sa_sigaction
+
+%% FSC-PROLOGUE
+#include <sys/wait.h>
+
+%% REQUIRED-DECLS
+auto_generate WIFEXITED;
+auto_generate WEXITSTATUS;
+auto_generate WIFSIGNALED;
+auto_generate WTERMSIG;
+auto_generate WIFSTOPPED;
+auto_generate WSTOPSIG;
+typedef siginfo_t;
+require_function waitid;
+
+%% NATIVE-IMPLEMENTATION
+
+#include <wrapper/fscw_helper.h>
+
+/**
+ * @fn int waitid(idtype_t idtype, id_t id, siginfo_t *infop, int option)
+ *
+ * @author Lepidum Co., Ltd
+ */
+fscw_int fscw_waitid(fscw_int_param(idtype),
+                     fscw_int_param(id),
+                     fscw_pointer_param(infop),
+                     fscw_int_param(options))
+{
+  int ret;
+  siginfo_t info;
+  fscw_siginfo_t buf;
+  ret = waitid(idtype, id, &info, options);
+  fscw_int_wrap_write(fscw_int_member(&buf, si_signo), info.si_signo);
+  fscw_int_wrap_write(fscw_int_member(&buf, si_errno), info.si_errno);
+  fscw_int_wrap_write(fscw_int_member(&buf, si_code),  info.si_code);
+  fscw_siginfo_t_write_pointer_param(infop, 0, buf);
+  return fscw_int_wrap(ret);
+}

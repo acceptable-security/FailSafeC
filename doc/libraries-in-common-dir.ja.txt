@@ -1,0 +1,17 @@
+Fail-Safe C コンパイラ特有でない一般的ライブラリファイル群
+
+1. 完全に独立
+
+Option		option 型関係の補助関数群
+Util		スタック消費削減版リスト操作関数、リスト操作の追加関数、拡張array
+Big_int_infix	中置記法の big_int と、追加関数群
+Set_list	リストを用いた集合の実装
+
+2. 機能的には独立だが実装のみ若干の依存あり
+
+Native_int_semantics	負数除算の各種実装。現時点では Fsc_config の検出した実装情報に依存。
+
+3. 実装は独立だが機能的に微妙なもの
+
+Topological_sort	Set_list 上の定義・使用関係に基づくトポロジカルソート
+

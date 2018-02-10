@@ -1,0 +1,7 @@
+The Debian Package failsafec
+----------------------------
+
+Fail-Safe C is a memory-safe compiler for the ANSI-C language.
+See <https://www.rcis.aist.go.jp/project/FailSafeC-en.html> for information.
+
+Yutaka OIWA <y.oiwa@aist.go.jp>, Fri, 13 Jun 2008 18:10:10 +0900

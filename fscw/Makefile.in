@@ -1,0 +1,56 @@
+srcdir = @srcdir@
+builddir = @builddir@
+LN_S = @LN_S@
+
+OCAMLMAKEFILE := $(srcdir)/../OCamlMakefile
+
+# include Makefile.config
+
+OCAML_DEFAULT_FLAGS := -w y
+OCAML_DEFAULT_DIRS := ../common ../parser ../trans
+
+SOURCES := \
+	dep.ml wl.ml wl_require.ml wl_generate.ml \
+	c_abstree_remove_definitions.ml c_global_only_typing.ml \
+	fscw_tree.ml fscw_parser.mly fscw_lexer.mll fscw_main.ml
+
+PACKS := extlib num unix str
+LIBS := common parser trans
+
+RESULT := fscw
+
+PRE_TARGETS += subdirs
+
+include $(builddir)/../Makefile.ocamlc-common
+
+FSCW_OPTIONS := SOURCES='fscw_main.ml' \
+	RESULT=fscw LIBS='$(LIBS) fscw' OCAMLFLAGS='$(OCAMLFLAGS)' BCSUFFIX='.bc' NCSUFFIX='.nc'
+
+all: top $(ALL_LIBRARY_TARGETS) copy_progs
+
+subdirs:
+	cd ../trans; OCAML_DEFAULT_DIRS= LIBS= $(MAKE) $(ALL_LIBRARY_TARGETS)
+
+fscw.bc $(if $(OCAML_BYTECODE_ONLY),,fscw.nc): $(SOURCES) fscw_main.ml ../parser/parser.cma
+	rm -f fscw fscw.bc fscw_main.cmo
+	$(MAKE) $(ALL_LIBRARY_TARGETS)
+	$(MAKE) -f $(OCAMLMAKEFILE) $(FSCW_OPTIONS) $(ALL_EXECUTIVE_TARGETS)
+
+clean:: clean-subdirs
+	rm -f fscw.a
+
+clean-subdirs:
+	cd ../trans; $(MAKE) OCAML_DEFAULT_DIRS= clean
+
+distclean-sub:
+	rm -f fscw.bc fscw.nc Makefile ../compiler/fscw.bc $(if $(OCAML_BYTECODE_ONLY),,../compiler/fscw.nc)
+
+symlink:
+	if test '$(srcdir)' != '$(builddir)' ; then \
+	  for i in $(SOURCES) ; do \
+	    $(RM) $$i ; \
+	    $(LN_S) $(srcdir)/$$i $$i ; \
+	  done ; \
+	fi
+
+include $(OCAMLMAKEFILE)

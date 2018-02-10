@@ -1,0 +1,91 @@
+/* -*- C -*- */
+
+%% C-PROLOGUE
+#include <nl_types.h>
+
+%% FSC-PROLOGUE
+#include <nl_types.h>
+
+%% REQUIRED-DECLS
+typedef nl_item;
+
+require_function catclose;
+require_function catgets;
+require_function catopen;
+
+%% NATIVE-IMPLEMENTATION
+
+#include "../private_storage.h"
+
+static const char private_storage_nl_catd_tag[] = "nl_catd";
+
+/**
+ * @fn int catclose(nl_catd catd)
+ * @brief close message catalog
+ *
+ * @author Lepidum Co., Ltd.
+ */
+fscw_int fscw_catclose(fscw_nl_catd_param(cd))
+{
+  int ret = -1;
+  if (base_remove_castflag(cd_base) != 0 || cd_ofs != (ofs_t)-1) {
+    nl_catd catd = get_private_storage(cd_base, cd_ofs, private_storage_nl_catd_tag);
+    if (catd == (nl_catd)-1) {
+      fsc_raise_error_library(cd_base, cd_ofs, ERR_OUTOFBOUNDS, "catclose: already closed");
+    }
+    ret = catclose(catd);
+    set_private_storage(cd_base, cd_ofs, (nl_catd)-1, private_storage_nl_catd_tag);
+  }
+  return fscw_int_wrap(ret);
+}
+
+/**
+ * @fn char *catgets(nl_catd catd, int set_id, int msg_id, const char *s)
+ * @brief lookup message catalog
+ *
+ * @author Lepidum Co., Ltd.
+ */
+fscw_pointer fscw_catgets(fscw_nl_catd_param(cd),
+                          fscw_int_param(set_id),
+                          fscw_int_param(msg_id),
+                          fscw_string_param(s))
+{
+  nl_catd catd = (nl_catd)-1;
+  char *ret;
+
+  if (base_remove_castflag(cd_base) != 0 || cd_ofs != (ofs_t)-1) {
+    catd = get_private_storage(cd_base, cd_ofs, private_storage_nl_catd_tag);
+    if (catd == (nl_catd)-1) {
+      fsc_raise_error_library(cd_base, cd_ofs, ERR_OUTOFBOUNDS, "catclose: already closed");
+    }
+  }
+  ret = catgets(catd, set_id, msg_id, NULL);
+  if (ret) {
+    return fscw_string_wrap(ret);
+  } else {
+    return ptrvalue_of_base_ofs(s_base, s_ofs);
+  }
+}
+
+/**
+ * @fn nl_catd catopen(const char *path, int oflag)
+ * @brief open message catalog
+ *
+ * @author Lepidum Co., Ltd.
+ */
+fscw_nl_catd fscw_catopen(fscw_string_param(path), fscw_int_param(oflag))
+{
+  fscw_string_buf buf = fscw_string_unwrap_param(path, "catopen");
+
+  fsc_set_system_env("NLSPATH");
+  fsc_set_system_env("LANG");
+  fsc_set_system_env("LC_MESSAGES");
+  nl_catd catd = catopen(buf.v, oflag);
+  fscw_string_release(buf);
+  if (catd != (nl_catd)-1) {
+    base_t p = alloc_private_storage(catd, private_storage_nl_catd_tag);
+    return fscw_pointer_wrap((void *)p);
+  } else {
+    return ptrvalue_of_base_ofs(0, ofs_of_base_vaddr(0, -1));
+  }
+}

@@ -1,0 +1,11 @@
+/* -*- C -*- */
+
+%% C-PROLOGUE
+#include <.h>
+
+%% FSC-PROLOGUE
+#include <.h>
+
+%% REQUIRED-DECLS
+
+%% NATIVE-IMPLEMENTATION

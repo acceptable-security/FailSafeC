@@ -1,0 +1,76 @@
+# 
+# Part of Fail-Safe C Runtime. Produced by Yutaka Oiwa.
+# (c) 2001-2005 Yutaka Oiwa.
+# (c) 2005-2006 AIST.
+# (c) 2006	 Lepidum Co. Ltd.
+#
+# This file is written by Yutaka Oiwa in 2004-2005.
+#
+# This file is distributed under Apache License 2.0 with a special exception.
+# See the file LICENSE contained in the distribution.
+#
+
+
+srcdir = @srcdir@
+builddir = @builddir@
+top_srcdir = @top_srcdir@
+top_builddir = @top_builddir@
+
+arch_header_dir = $(top_builddir)/../arch-@host@/include
+
+LIB_SUBDIR := bsd bsdsource unistd fscw
+ALL_SUBDIR := 
+
+LIB_NAME = fsc_stdlib
+OBJ_NAMES = puts fileptr main_globalvars.safe main_bootstrap.safe printf \
+	strtol scanf gets malloc errno perror \
+	fileop string string_2.safe ctype \
+	stdlib_int math math_var.safe memop netinet_in_const.safe \
+	signal.safe signal_2.safe groups \
+	fcntl resource exec.safe \
+	fileptr_gen.safe \
+	wait io \
+	sockets strerror \
+	time_storage.safe utsname.safe ftime open memset qsort.safe \
+	ioctl locale \
+	dirent rename inet syslog \
+	stdlib_util execvpe.safe \
+	if utimes private_storage environ.safe h_errno \
+	unistd_2.safe longjmp
+#	fstat chmod
+
+INCLUDE = 
+#FSCCOPTION = -fstdlib-implementation -I$(arch_header_dir)
+FSCCOPTION = -I$(arch_header_dir)
+
+include $(top_builddir)/Makefile.runtime.rules
+
+all: fsc_stdlib.h opt-lib debug-lib all-subdir manifest
+
+ifeq '$(srcdir)' '$(builddir)'
+fsc_stdlib.h:
+else
+fsc_stdlib.h:
+	if test "$(srcdir)" != "$(builddir)"; then \
+		rm -f $@ *_inline.c && \
+		$(LN_S) $(srcdir)/fsc_stdlib.h $@ && \
+		$(LN_S) $(srcdir)/*_inline.c . ; \
+	fi
+endif
+
+manifest: $(srcdir)/stdlib.manifest
+
+$(srcdir)/stdlib.manifest: fsc_stdlib.opt.a $(srcdir)/src.manifest.in
+	$(MAKE) -C fscw fscw.manifest
+	$(srcdir)/make_manifest.pl fsc_stdlib.opt.a > stdlib.manifest
+clean::
+	rm -f stdlib.manifest
+
+ctype.$(O):      $(srcdir)/ctype_inline.c
+stdlib_int.$(O): $(srcdir)/stdlib_int_inline.c
+math.$(O):       $(srcdir)/math_inline.c
+signal.$(O):     signal_2.safe.c
+signal_2.safe.c: $(arch_header_dir)/signal.h
+main_bootstrap.$(O): main_globalvars.safe.c
+
+.DELETE_ON_ERROR:

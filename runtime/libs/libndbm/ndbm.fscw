@@ -1,0 +1,295 @@
+/* -*- C -*- */
+
+%% C-PROLOGUE
+#include "fsc_autoconf.h"
+#ifdef HAVE_NDBM_H
+# include <ndbm.h>
+#else
+# ifdef HAVE_GDBM_DASH_NDBM_H
+#  include <gdbm-ndbm.h>
+# else
+#  ifdef HAVE_GDBM_SLASH_NDBM_H
+#   include <gdbm/ndbm.h>
+#  else
+#   error ndbm header not found.
+#  endif
+# endif
+#endif
+
+#ifdef HAVE_LIBNDBM
+# define NDBM_LIBMANIFEST "\tRequire-native-libraries=ndbm"
+#else
+# ifdef HAVE_LIBGDBM_COMPAT
+#  define NDBM_LIBMANIFEST "\tRequire-native-libraries=gdbm_compat,gdbm"
+# else
+#  error ndbm library not found.
+# endif
+#endif
+
+static const char private_storage_DBM_tag[] = "DBM";
+
+#include <string.h>
+
+/* TODO: auto append this two lines */
+#define FSC_RUNTIME_LIBRARY
+#include <fsc_runtime.h>
+#include <wrapper_helper.h>
+#define FSCW_INLINE static inline
+
+%% FSC-PROLOGUE
+#include <ndbm.h>
+
+#include "../../fsc_autoconf.h"
+#ifdef HAVE_LIBNDBM
+# define NDBM_LIBREQ "ndbm"
+#else
+# ifdef HAVE_LIBGDBM_COMPAT
+#  define NDBM_LIBREQ "gdbm_compat,gdbm"
+# else
+#  error ndbm library not found.
+# endif
+#endif
+
+__fsc_attribute__((require_native_libraries NDBM_LIBREQ)) extern int dbm_clearerr(DBM *);
+__fsc_attribute__((require_native_libraries NDBM_LIBREQ)) extern void dbm_close(DBM *);
+__fsc_attribute__((require_native_libraries NDBM_LIBREQ)) extern int dbm_delete(DBM *, datum);
+__fsc_attribute__((require_native_libraries NDBM_LIBREQ)) extern int dbm_error(DBM *);
+__fsc_attribute__((require_native_libraries NDBM_LIBREQ)) extern datum dbm_fetch(DBM *, datum);
+__fsc_attribute__((require_native_libraries NDBM_LIBREQ)) extern datum dbm_firstkey(DBM *);
+__fsc_attribute__((require_native_libraries NDBM_LIBREQ)) extern datum dbm_nextkey(DBM *);
+__fsc_attribute__((require_native_libraries NDBM_LIBREQ)) extern DBM *dbm_open(const char *, int, mode_t);
+__fsc_attribute__((require_native_libraries NDBM_LIBREQ)) extern int dbm_store(DBM *, datum, datum, int);
+
+__fsc_attribute__((require_native_libraries NDBM_LIBREQ)) extern int dbm_pagfno(DBM *);
+__fsc_attribute__((require_native_libraries NDBM_LIBREQ)) extern int dbm_dirfno(DBM *);
+
+%% REQUIRED-DECLS
+typedef datum;
+typedef size_t;
+typedef mode_t;
+
+require_function dbm_clearerr;
+require_function dbm_close;
+require_function dbm_delete;
+require_function dbm_error;
+require_function dbm_fetch;
+require_function dbm_firstkey;
+require_function dbm_nextkey;
+require_function dbm_open;
+require_function dbm_store;
+
+require_function dbm_pagfno;
+require_function dbm_dirfno;
+%% NATIVE-IMPLEMENTATION
+
+#include "../../stdlib/private_storage.h"
+
+static DBM *get_DBM_non_null(fscw_pointer_param(pdb))
+{
+  DBM *db = get_private_storage(pdb_base, pdb_ofs, private_storage_DBM_tag);
+  if (db == NULL) {
+    fsc_raise_error_library(pdb_base, pdb_ofs, ERR_OUTOFBOUNDS, "get_DBM_non_null: DBM already closed");
+  }
+  return db;
+}
+
+/**
+ * @fn int dbm_clearerr(DBM *db)
+ * @brief clear error
+ *
+ * @author Lepidum Co., Ltd.
+ */
+fscw_int fscw_dbm_clearerr(fscw_pointer_param(pdb))
+{
+  DBM *db = get_DBM_non_null(pdb_base, pdb_ofs);
+  return fscw_int_wrap(dbm_clearerr(db)+0); /* gdbm-ndbm.h defines dbm_cleaerr(db) as empty */
+}
+
+/**
+ * @fn void dbm_close(DBM *db)
+ * @brief close database
+ *
+ * @author Lepidum Co., Ltd.
+ */
+void fscw_dbm_close(fscw_pointer_param(pdb))
+{
+  DBM *db = get_DBM_non_null(pdb_base, pdb_ofs);
+  dbm_close(db);
+  set_private_storage(pdb_base, pdb_ofs, NULL, private_storage_DBM_tag);
+}
+
+struct fscw_datum_buf {
+  datum v;
+  void *to_discard;
+};
+
+static struct fscw_datum_buf unwrap_datum(fscw_datum *key, const char *libloc)
+{
+  fscw_pointer p = fscw_pointer_read(fscw_pointer_member(key, dptr));
+  size_t s = fscw_size_t_read_unwrap(fscw_size_t_member(key, dsize));
+  base_t p_base = base_of_ptrvalue(p);
+  ofs_t  p_ofs  = ofs_of_ptrvalue(p);
+  struct fscw_datum_buf buf;
+
+  buf.v.dptr = wrapper_get_rawimage(p_base, p_ofs, &buf.to_discard, s, libloc);
+  buf.v.dsize = s;
+  return buf;
+}
+
+static void wrap_datum(fscw_datum *dst, datum *src)
+{
+  size_t sz = src->dsize;
+  fscw_char *p = NULL;
+  if (src->dptr) {
+    p = fscw_char_alloc(sz);
+    memcpy(p, src->dptr, sz);
+  }
+  fscw_pointer_wrap_write(fscw_pointer_member(dst, dptr), p);
+  fscw_size_t_wrap_write(fscw_size_t_member(dst, dsize), sz);
+}
+
+static void release_datum(struct fscw_datum_buf buf)
+{
+  wrapper_release_tmpbuf(buf.to_discard);
+}
+
+/**
+ * @fn int dbm_delete(DBM *db, datum key)
+ * @brief delete database entry
+ *
+ * @author Lepidum Co., Ltd.
+ */
+fscw_int fscw_dbm_delete(fscw_pointer_param(pdb),
+                         fscw_datum_param(key))
+{
+  DBM *db = get_DBM_non_null(pdb_base, pdb_ofs);
+  struct fscw_datum_buf buf = unwrap_datum(&key, "dbm_delete");
+  int ret = dbm_delete(db, buf.v);
+  release_datum(buf);
+  return fscw_int_wrap(ret);
+}
+
+/**
+ * @fn int dbm_error(DBM *db)
+ * @brief test database error status
+ *
+ * @author Lepidum Co., Ltd.
+ */
+fscw_int fscw_dbm_error(fscw_pointer_param(pdb))
+{
+  DBM *db = get_DBM_non_null(pdb_base, pdb_ofs);
+  return fscw_int_wrap(dbm_error(db));
+}
+
+/**
+ * @fn datum dbm_fetch(DBM *db, datum key)
+ * @brief lookup database
+ *
+ * @author Lepidum Co., Ltd.
+ */
+fscw_datum fscw_dbm_fetch(fscw_pointer_param(pdb),
+                          fscw_datum_param(key))
+{
+  DBM *db = get_DBM_non_null(pdb_base, pdb_ofs);
+  fscw_datum r;
+  struct fscw_datum_buf buf = unwrap_datum(&key, "dbm_fetch");
+  datum ret = dbm_fetch(db, buf.v);
+  release_datum(buf);
+  wrap_datum(&r, &ret);
+  return r;
+}
+
+/**
+ * @fn datum dbm_firstkey(DBM *db)
+ * @brief enumerate database key
+ *
+ * @author Lepidum Co., Ltd.
+ */
+fscw_datum fscw_dbm_firstkey(fscw_pointer_param(pdb))
+{
+  DBM *db = get_DBM_non_null(pdb_base, pdb_ofs);
+  fscw_datum r;
+  datum ret = dbm_firstkey(db);
+  wrap_datum(&r, &ret);
+  return r;
+}
+
+/**
+ * @fn datum dbm_nextkey(DBM *db)
+ * @brief enumerate database key
+ *
+ * @author Lepidum Co., Ltd.
+ */
+fscw_datum fscw_dbm_nextkey(fscw_pointer_param(pdb))
+{
+  DBM *db = get_DBM_non_null(pdb_base, pdb_ofs);
+  fscw_datum r;
+  datum ret = dbm_nextkey(db);
+  wrap_datum(&r, &ret);
+  return r;
+}
+
+/**
+ * @fn DBM *dbm_open(const char *name, int flags, mode_t mode)
+ * @brief open database
+ *
+ * @author Lepidum Co., Ltd.
+ */
+fscw_pointer fscw_dbm_open(fscw_string_param(name),
+                           fscw_int_param(flags),
+                           fscw_mode_t_param(mode))
+{
+  fscw_string_buf buf = fscw_string_unwrap_param(name, "dbm_open");
+  DBM *db = dbm_open(buf.v, flags, mode);
+  fscw_string_release(buf);
+  if (db) {
+    base_t p = alloc_private_storage(db, private_storage_DBM_tag);
+    return fscw_pointer_wrap((void *)p);
+  } else {
+    return fscw_pointer_wrap(NULL);
+  }
+}
+
+/**
+ * @fn int dbm_store(DBM *db, datum key, datum value, int mode)
+ * @brief add new entry to database
+ *
+ * @author Lepidum Co., Ltd.
+ */
+fscw_int fscw_dbm_store(fscw_pointer_param(pdb),
+                        fscw_datum_param(key),
+                        fscw_datum_param(value),
+                        fscw_int_param(mode))
+{
+  DBM *db = get_DBM_non_null(pdb_base, pdb_ofs);
+  struct fscw_datum_buf kbuf = unwrap_datum(&key, "dbm_store");
+  struct fscw_datum_buf vbuf = unwrap_datum(&value, "dbm_store");
+  int ret = dbm_store(db, kbuf.v, vbuf.v, mode);
+  release_datum(kbuf);
+  release_datum(vbuf);
+  return fscw_int_wrap(ret);
+}
+
+/**
+ * @fn int dbm_pagfno(DBM *db)
+ * @brief return file descriptor.
+ *
+ * @author Lepidum Co., Ltd.
+ */
+fscw_int fscw_dbm_pagfno(fscw_pointer_param(pdb))
+{
+  DBM *db = get_DBM_non_null(pdb_base, pdb_ofs);
+  return fscw_int_wrap(dbm_pagfno(db));
+}
+
+/**
+ * @fn int dbm_dirfno(DBM *db)
+ * @brief return file descriptor.
+ *
+ * @author Lepidum Co., Ltd.
+ */
+fscw_int fscw_dbm_dirfno(fscw_pointer_param(pdb))
+{
+  DBM *db = get_DBM_non_null(pdb_base, pdb_ofs);
+  return fscw_int_wrap(dbm_dirfno(db));
+}

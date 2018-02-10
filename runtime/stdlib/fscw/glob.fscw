@@ -1,0 +1,112 @@
+/* -*- C -*- */
+
+%% C-PROLOGUE
+#include <glob.h>
+
+%% FSC-PROLOGUE
+#include <glob.h>
+
+%% REQUIRED-DECLS
+typedef glob_t;
+typedef size_t;
+
+require_function glob;
+require_function globfree;
+%% NATIVE-IMPLEMENTATION
+
+#include <wrapper/fscw_helper.h>
+
+
+/**
+ * @fn int glob(const char *pattern, int flags, int (*errfunc)(const char *epath, int eerrno), glob_t *pglob)
+ * @brief glob pattern
+ *
+ * @author Lepidum Co., Ltd.
+ */
+fscw_int fscw_glob(fscw_string_param(pattern),
+                   fscw_int_param(flags),
+                   fscw_pointer_param(errfunc),
+                   fscw_pointer_param(pglob))
+{
+  fscw_string_buf pat = fscw_string_unwrap_param(pattern, "glob");
+  glob_t g;
+  int ret;
+  fscw_glob_t fg;
+
+  int err(const char *p, int e) {
+    value *va = (value *)fsc_alloc_varargs(2);
+    fscw_string pb = 0;
+    int ret;
+    
+    if (p) {
+      pb = fscw_string_wrap(p);
+    }
+    va[0] = value_of_ptrvalue(pb);
+    va[1] = fscw_int_wrap(e);
+    ret = value_of_dvalue(fsc_invoke_func_with_varargs(0, errfunc_base, errfunc_ofs, (base_t)va, 0));
+    fsc_dealloc_varargs_finished((base_t)va);
+    return ret;
+  }
+
+  fg = fscw_glob_t_read_pointer_param(pglob, 0);
+  ret = glob(pat.v, flags & ~(GLOB_APPEND|GLOB_DOOFFS),
+             fscw_is_null(errfunc) ? NULL : err,
+             &g);
+  fscw_string_release(pat);
+
+  {
+    size_t old_pathc = 0;
+    fscw_pointer old_pathv = fscw_pointer_wrap(NULL);
+    size_t old_offs = 0;
+    size_t new_pathc;
+    fscw_string *new_pathv;
+    size_t new_offs = 0;
+    int i;
+
+    if (flags & GLOB_APPEND) {
+      base_t v_base;
+      ofs_t  v_ofs;
+      old_pathc = fscw_size_t_read_unwrap(fscw_size_t_member(&fg, gl_pathc));
+      old_pathv = fscw_pointer_read(fscw_pointer_member(&fg, gl_pathv));
+      v_base = base_of_ptrvalue(old_pathv);
+      v_ofs  = ofs_of_ptrvalue(old_pathv);
+      if (old_pathc > 0) {
+        while (fscw_string_read_pointer_param(v, old_offs) == fscw_pointer_wrap(NULL))
+          old_offs++;
+      }
+    }
+    if (flags & GLOB_DOOFFS) {
+      new_offs = fscw_size_t_read_unwrap(fscw_size_t_member(&fg, gl_offs));
+    }
+
+    new_pathc = old_pathc + g.gl_pathc;
+    new_pathv = fscw_string_alloc(new_offs + new_pathc + 1);
+    for (i = 0; i < new_offs; i++) {
+      new_pathv[i] = fscw_pointer_wrap(NULL);
+    }
+    for (i = 0; i < old_pathc; i++) {
+      base_t v_base = base_of_ptrvalue(old_pathv);
+      ofs_t  v_ofs  = ofs_of_ptrvalue(old_pathv);
+      new_pathv[new_offs + i] = fscw_string_read_pointer_param(v, old_offs + i);
+    }
+    for (i = 0; i < g.gl_pathc; i++) {
+      new_pathv[new_offs + old_pathc + i] = fscw_string_wrap(g.gl_pathv[i]);
+    }
+    new_pathv[new_offs + new_pathc] = fscw_pointer_wrap(NULL);
+
+    fscw_size_t_wrap_write(fscw_size_t_member(&fg, gl_pathc), new_pathc);
+    fscw_pointer_wrap_write(fscw_pointer_member(&fg, gl_pathv), new_pathv);
+    fscw_glob_t_write_pointer_param(pglob, 0, fg);
+  }
+  globfree(&g);
+  return fscw_int_wrap(ret);
+}
+/**
+ * @fn void globfree(glob_t *pglob)
+ * @brief free glob result
+ *
+ * @author Lepidum Co., Ltd.
+ */
+void fscw_globfree(fscw_pointer_param(param_0))
+{
+}

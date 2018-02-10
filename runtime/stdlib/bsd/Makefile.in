@@ -1,0 +1,13 @@
+srcdir = @srcdir@
+builddir = @builddir@
+top_srcdir = @top_srcdir@
+top_builddir = @top_builddir@
+
+LIB_NAME = ../fsc_stdlib
+OBJ_NAMES = getifaddrs.safe
+INCLUDE = 
+
+all: opt debug
+include $(top_builddir)/Makefile.runtime.rules
+FSCCOPTION = -fmulti-module
+

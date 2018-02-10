@@ -1,0 +1,190 @@
+/* -*- C -*- */
+%% C-PROLOGUE
+#define _XOPEN_SOURCE 600
+#include <sys/select.h>
+#include <limits.h>
+#include <errno.h>
+#include <string.h>
+#include <signal.h>
+
+%% FSC-PROLOGUE
+#include <sys/select.h>
+
+%% REQUIRED-DECLS
+
+struct stdlib_timespec;
+struct stdlib_select_timeval;
+
+typedef time_t;
+typedef suseconds_t;
+
+require_function select;
+require_function pselect;
+
+%% NATIVE-IMPLEMENTATION
+
+#include <wrapper/fscw_helper.h>
+
+static fd_set *unwrap_fd_set(fd_set *dst, fscw_pointer_param(src), int setlen, const char *libloc) {
+  int i;
+  if (fscw_is_null(src)) return NULL;
+
+  FD_ZERO(dst);
+  fscw_buffer buf = fscw_buffer_get(fscw_base_ofs(src), setlen, libloc);
+  for (i = 0; i < setlen * CHAR_BIT && i < FD_SETSIZE; ++i) {
+    int offset = i / CHAR_BIT, mask = 1 << (i % CHAR_BIT);
+    if ((*((unsigned char *)buf.v + offset) & mask) != 0) FD_SET(i, dst);
+  }
+  fscw_buffer_release(buf);
+  return dst;
+}
+
+static void wrap_fd_set(fscw_pointer_param(dst), const fd_set *src, int setlen, const char *libloc) {
+  int i;
+  if (!src) return;
+
+  fscw_buffer buf = fscw_buffer_get_for_read(fscw_base_ofs(dst), setlen, libloc);
+  memset(buf.v, 0x00, setlen);
+  for (i = 0; i < setlen * CHAR_BIT && i < FD_SETSIZE; ++i) {
+    int offset = i / CHAR_BIT, mask = 1 << (i % CHAR_BIT);
+    if (FD_ISSET(i, src)) *((unsigned char *)buf.v + offset) |= mask;
+  }
+  fscw_buffer_writeback_release(fscw_base_ofs(dst), buf, setlen);
+}
+
+/* XXX: copied from signal.c */
+static void make_real_samask(sigset_t *r, base_t b, ofs_t o) {
+  int i;
+
+  sigemptyset(r);
+  for (i = 0; i < _NSIG; i++) {
+    if (read_byte(b, o + i))
+      sigaddset(r, i);
+  }
+}
+
+/**
+ * @fn int select(int nfds, fd_set *readfds, fd_set *writefds, fd_set *errorfds, struct timeval *timeout)
+ * @brief wait for an event of multiple file descriptors.
+ * @param nfds range of file descriptors.
+ * @param readfds a set of file descriptors to be checked for being readable.
+ * @param writefds a set of file descriptors to be checked for being writable.
+ * @param errorfds a set of file descriptors to be checked for error.
+ * @param timeout time until timeout.
+ * @retval >=0 number of file descriptors in readfds, writefds and error fds.
+ * @retval -1 error occured.
+ *
+ * @crashcase illegal pointer, buffer overflow.
+ * @fsctype struct(atomic, rw)
+ *
+ * @author Lepidum Co., Ltd.
+ */
+fscw_int fscw_select(fscw_int_param(nfds),
+                     fscw_pointer_param(rfds),
+                     fscw_pointer_param(wfds),
+                     fscw_pointer_param(efds),
+                     fscw_pointer_param(timeout))
+{
+  fd_set n_rfds, n_wfds, n_efds, *p_rfds, *p_wfds, *p_efds;
+  struct timeval n_timeout, *p_timeout;
+
+  int i, setlen, ret;
+
+  if (nfds < 0 || FD_SETSIZE < nfds) {
+    errno = EINVAL;
+    return -1;
+  }
+  if (nfds + (CHAR_BIT - 1) < nfds) {
+    fsc_raise_error_library(0, nfds, ERR_INVALIDARGS, "select: nfds too large.");
+  }
+  setlen = (nfds + (CHAR_BIT - 1)) / CHAR_BIT;
+
+  p_rfds = unwrap_fd_set(&n_rfds, fscw_base_ofs(rfds), setlen, "select");
+  p_wfds = unwrap_fd_set(&n_wfds, fscw_base_ofs(wfds), setlen, "select");
+  p_efds = unwrap_fd_set(&n_efds, fscw_base_ofs(efds), setlen, "select");
+
+  if (fscw_is_null(timeout)) {
+    p_timeout = NULL;
+  } else {
+    fscw_struct_stdlib_select_timeval buf = fscw_struct_stdlib_select_timeval_read_pointer_param(timeout, 0);
+    n_timeout.tv_sec = fscw_time_t_read(fscw_time_t_member(&buf, tv_sec));
+    n_timeout.tv_usec = fscw_suseconds_t_read(fscw_long_member(&buf, tv_usec));
+    p_timeout = &n_timeout;
+  }
+
+  ret = select(nfds, p_rfds, p_wfds, p_efds, p_timeout);
+
+  if (ret != -1) {
+    wrap_fd_set(fscw_base_ofs(rfds), p_rfds, setlen, "select");
+    wrap_fd_set(fscw_base_ofs(wfds), p_wfds, setlen, "select");
+    wrap_fd_set(fscw_base_ofs(efds), p_efds, setlen, "select");
+  }
+
+  return fscw_int_wrap(ret);
+}
+
+/**
+ * @fn int pselect(int nfds, fd_set *rfds, fd_set *wfds, fd_set *efds, const struct timespec *timeout, const sigset_t *sig)
+ * @brief select sockets with signal mask and nanoseconds resolution timeout.
+ * @param n maximum number of fd + 1
+ * @param rfds collection of fd to check readable or NULL
+ * @param wfds collection of fd to check writable or NULL
+ * @param efds collection of fd to check error or NULL
+ * @param timeout timeout period
+ * @param sig signal mask
+ * @retval number of fds selected, or -1 on error.
+ *
+ * @author Lepidum Co., Ltd.
+ */
+fscw_int fscw_pselect(fscw_int_param(nfds),
+                      fscw_pointer_param(rfds),
+                      fscw_pointer_param(wfds),
+                      fscw_pointer_param(efds),
+                      fscw_pointer_param(timeout),
+                      fscw_pointer_param(sig))
+{
+  fd_set n_rfds, n_wfds, n_efds, *p_rfds, *p_wfds, *p_efds;
+  struct timespec n_timeout, *p_timeout;
+  sigset_t n_sigmask, *p_sigmask;
+
+  int i, setlen, ret;
+
+  if (nfds < 0 || FD_SETSIZE < nfds) {
+    errno = EINVAL;
+    return -1;
+  }
+  if (nfds + (CHAR_BIT - 1) < nfds) {
+    fsc_raise_error_library(0, nfds, ERR_INVALIDARGS, "pselect: nfds too large.");
+  }
+  setlen = (nfds + (CHAR_BIT - 1)) / CHAR_BIT;
+
+  p_rfds = unwrap_fd_set(&n_rfds, fscw_base_ofs(rfds), setlen, "pselect");
+  p_wfds = unwrap_fd_set(&n_wfds, fscw_base_ofs(wfds), setlen, "pselect");
+  p_efds = unwrap_fd_set(&n_efds, fscw_base_ofs(efds), setlen, "pselect");
+
+  if (fscw_is_null(timeout)) {
+    p_timeout = NULL;
+  } else {
+    fscw_struct_stdlib_timespec buf = fscw_struct_stdlib_timespec_read_pointer_param(timeout, 0);
+    n_timeout.tv_sec = fscw_time_t_read(fscw_time_t_member(&buf, tv_sec));
+    n_timeout.tv_nsec = fscw_long_read(fscw_long_member(&buf, tv_nsec));
+    p_timeout = &n_timeout;
+  }
+
+  if (fscw_is_null(sig)) {
+    p_sigmask = NULL;
+  } else {
+    make_real_samask(&n_sigmask, fscw_base_ofs(sig));
+    p_sigmask = &n_sigmask;
+  }
+
+  ret = pselect(nfds, p_rfds, p_wfds, p_efds, p_timeout, p_sigmask);
+
+  if (ret != -1) {
+    wrap_fd_set(fscw_base_ofs(rfds), p_rfds, setlen, "pselect");
+    wrap_fd_set(fscw_base_ofs(wfds), p_wfds, setlen, "pselect");
+    wrap_fd_set(fscw_base_ofs(efds), p_efds, setlen, "pselect");
+  }
+
+  return fscw_int_wrap(ret);
+}

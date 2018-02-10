@@ -1,0 +1,38 @@
+-*- text -*-
+================================================================
+               Local Packaging of Fail-Safe C
+================================================================
+
+The original Fail-Safe C archive and Subversion snapshots supports
+building of local binary packages.
+
+Currently it supports Debian GNU/Linux and its derivatives (e.g. Knoppix).
+
+Note: if you are referring to distribution-offered source archives,
+      use distribution-specific packaging method instead.
+
+Information on any other distribution is welcome.
+
+
+1. building local Debian packages
+
+  For the first time, run the script "local-packaging/setup-debian.sh".
+  This will ask your information (which will be embedded as a
+  binary package maintainer) and set up a debian directory.
+
+  Then type "fakeroot debian/rules binary" at the top directory
+  of the sources.  Currently rebuilding a source package is not supported.
+
+  Version numbers will be taken from either from VERSION file or 
+  from the status of the subversion working directory.
+
+  The following combination of releases and architectures are tested.
+
+    * i386: etch, lenny
+    * mipsel: etch, lenny
+    * arm: lenny
+         - Etch/arm is not supported, as its libc contains an
+	   obscure bug related to decimal printing of "long long" values.
+	   (check `printf("%lld", 4294967296000000000LL);')
+
+    - It should also work with later releases.  If not, please tell me.

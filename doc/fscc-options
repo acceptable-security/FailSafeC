@@ -1,0 +1,87 @@
+-*- text -*-
+
+** -f options for the translator **
+
+-fforce-emit-stack-unwinding
+
+	For the safe support of set/longjmp, the Fail-Safe C
+	translator automatically generates stack tracking codes for
+	functions using setjmp.
+
+        In addition, now the compiler automatically marks all
+	heap-allocated local variables as "deallocated" upon function
+	exit, so that uses of escaped stale pointers will be trapped
+	and reported.
+	
+	However, if several call frames are skipped using longjmp,
+	local variables of skipped frames are not marked as released.
+	It is completely safe behavior, and these will be deallocated by
+	using GC later, but it may be considered inconsistent.
+
+	By using this option the compiler inserts stack tracking
+	codes to every function even if setjmp is not used.  However,
+	it may introduce some performance penalty on every function
+	invocation.
+
+-fno-polymorphic-analysis
+
+	Disable type analysis for polymorphic functions
+	(e.g. malloc()).  This option will not be needed for most
+	programs.
+
+-fptr-compare-signed-offset
+
+	Use signed operations for comparing offsets of pointers.  This
+	hack will rescue broken codes which relies on that &a[-1] is
+	smaller than &a[0], even when &a points to the top of an array.
+
+-fgnu-autoconf-workaround
+
+	Add workaround for GNU autoconf.
+
+	Autoconf uses prototype declaration with type char(...) when
+	checking existence of functions inside library.  The Fail-Safe
+	C linker checks value's type during linking, thus it rejects
+	such usage.
+
+	This option accepts any function types with only varargs
+	arguments as a wildcard type, which can be linked with any
+	definition with function types.
+
+-fno-boundary-cache
+
+	Disables caching of block boundary information inside
+	function.  It will enable precise checking of accesses for
+	blocks deallocated inside a function.
+
+-fno-clearflag
+
+	By default, when the compiled code encounters a pointer which
+	is flagged as a cast pointer but is actually not cast, it will
+	silently clears the flag of a pointer.  This option inhibits
+	this behavior.
+
+	The option may give thin performance gain for programs not
+	using malloc().  However, if there is a call to malloc() for
+	which static type analysis was failed, there will be a huge
+	performance penalty.
+
+-fno-shortcut-cast
+
+	Fail-Safe C optimizes some special cases for pointer casts
+	(e.g. a char pointer pointing to a short or float array).
+	This option disables such a behavior.
+
+-fno-use-location
+
+	Disables emitting #line directives for output source.
+	If you want to debug the generated code, not the original
+	C code, use this option.
+
+-fforce-setjmp-safe
+
+	If Fail-Safe C encounters a call to setjmp function, it will
+	generate a code safe for setjmp.  This option enforces this
+	behavior for all functions.  There will be a significant
+	performance penalty.
+

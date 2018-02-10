@@ -1,0 +1,68 @@
+/* -*- C -*- */
+
+%% C-PROLOGUE
+
+/* TODO: auto append this two lines */
+#define FSC_RUNTIME_LIBRARY
+#include <fsc_runtime.h>
+#include <wrapper_helper.h>
+#define FSCW_INLINE static inline
+
+%% FSC-PROLOGUE
+
+%% REQUIRED-DECLS
+
+typedef fscw_primitive_types;
+
+%% NATIVE-IMPLEMENTATION
+
+fscw_pointer fscw_string_array_wrap(const char * const *p)
+{
+  int i, n;
+  fscw_string *dst;
+
+  for (n = 0; p[n]; n++)
+    ;
+
+  dst = fscw_string_alloc(n + 1);
+
+  for (i = 0; i < n; i++) {
+    dst[i] = fscw_string_wrap(p[i]);
+  }
+  dst[i] = fscw_pointer_wrap(NULL);
+
+  return fscw_pointer_wrap(dst);
+}
+
+#if 0
+struct fscw_string_array_buf
+fscw_string_array_unwrap_to(char **dst, fscw_pointer_param(src), size_t count, const char *libcloc)
+{
+  struct fscw_string_array_buf buf;
+  size_t i;
+  buf.v = dst;
+  buf.count = count;
+  buf.release_v = 0;
+  buf.buf = fsc_alloc_raw(sizeof (struct fscw_string_buf) * count);
+  for (i = 0; i < count; i++) {
+    fscw_string s = fscw_string_read_pointer_param(src, i);
+    base_t s_base = base_of_ptrvalue(s);
+    ofs_t s_ofs = ofs_of_ptrvalue(s);
+    buf.buf[i] = fscw_string_unwrap_param(s, libcloc);
+    buf.v[i] = buf.buf[i].v;
+  }
+  return buf;
+}
+
+void fscw_string_array_release(fscw_string_array_buf buf)
+{
+  size_t i;
+  for (i = 0; i < buf.count; i++) {
+    fscw_string_release(buf.buf[i]);
+  }
+  if (buf.release_v) {
+    fsc_release_raw(buf.v);
+  }
+}
+
+#endif

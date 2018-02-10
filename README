@@ -1,0 +1,280 @@
+; -*- mode: text; coding: utf-8 -*-
+=====================================================================
+   Fail-Safe C Compiler. Produced by Yutaka OIWA.
+                      Contact Address: <oiwa-fsc at m.aist.go.jp>.
+=====================================================================
+
+
+``Fail-Safe C'' is a memory-safe implementation of the full ANSI C
+language. More precisely, it detects and disallows all unsafe
+operations, yet conforming to the full ANSI C standard (including
+casts and unions) and even supporting many "dirty tricks" common in
+many existing programs which do not strictly conform to the
+standard. This work also proposes several techniques---both
+compile-time and runtime---to reduce the overhead of runtime
+checks. By using the Fail-Safe C compiler, programmers can easily make
+their programs safe without performing heavy rewriting or porting of
+their code.
+
+
+
+=== 1: Build ===
+
+The current version of the Fail-Safe C Compiler supports the following
+architectures and operating systems:
+
+  * i386 Linux
+  * mipsel (little endian) Linux
+  * arm Linux
+
+It may work on Linux on other 32bit architectures with small modifications.
+Support for 64bit architecture may appear in a future version.
+
+== Preparation ==
+
+To compile Fail-Safe C compiler, the following components are required:
+
+  * Objective Caml: version 3.09 or later.
+
+     - Version 3.10 or later is recommended for better performance.
+
+     - On ARM architecture, 3.11.0 or later is strongly recommended
+       due to OCaml bugs.
+
+  * findlib: 1.1 or later.
+
+  * extlib: 1.5 or later.
+
+  * Gnu C Compiler (gcc): version 4.1 or later.
+
+     - Currently tested with GCC 4.1.2.
+ 
+     - GCC 3.3 or 4.0 may work, but not tested.
+
+     - Other compilers are not tested (except some old version of
+       Intel C Compiler).  At least the compiler must support
+       GCC-compatible complex integer numbers, inline assembly code,
+       attributes and ELF directives.
+
+  * GNU binutils: 2.15 or later.
+
+     - The system uses objdump, nm, ld, and ar.
+
+     - GNU ld (or compatible one) must be used.
+
+  * Bohem's GC library: version 6.0 or later.
+
+  * Perl: 5.8 or later.
+
+== Building a native compiler ==
+
+To build the native compiler and runtime systems, 
+invoke "./configure" at the top of the source directory, then
+invoke "make".
+
+After successful compilation, you can use Fail-Safe C in one of the
+following ways:
+
+  * You can use the script "driver/fscc" directly in the source files.
+
+  * You can create symbolic links (not hard links) to "driver/fscc".
+    In these two usage cases the script will search any required files
+    in relative locations from the real location of the script.
+
+  * "make install" will install required files into /usr/local/bin
+    and /usr/local/lib/fsc.  The prefix "/usr/local" may be changed
+    in a parameter for either configure or "make install".
+
+== Building a cross compiler ==
+
+To build cross compilers, first you need to prepare several
+cross-compiling toolchains for the tools listed above.  Then you can
+pass an option "--target" to the configure script.
+
+However, you need to prepare several configuration files for
+architecture-dependent properties.  The distribution includes
+pre-configured files in the "arch/" directory.  Alternatively, you can
+first build a native compiler on the target architecture for preparing
+those, and copy the results into the host directory.
+
+== Building in a sub-directory ==
+
+Above processes can also be done inside a subdirectories of the
+source-code tree.
+create a build directory and invoke the main configure script
+from that directory.
+
+For example,
+
+  mkdir build
+  cd build
+  ../configure
+  make
+
+will build the whole Fail-Safe C system in the directory "build".
+
+== Building a custom local packages ==
+
+See the document "README.local-packaging" for details.
+
+
+=== 2: Usage ===
+
+== Basic Usage ==
+
+The script "fscc" controls the whole process of the Fail-Safe C
+compilation. It can be used just in the common compiler interface.
+For example, the command
+
+  fscc -o hello hello.c
+
+compiles the source file "hello.c" and output the executable file to
+the file "hello".
+
+If your project has multiple file, you can also use compiler and
+linker separately, like
+
+  fscc -c main.c
+  fscc -c libmine.c
+  fscc -o myprogram main.o libmine.o
+
+
+Current driver and compiler understands the following standard options.
+
+   -o: Specify the name of the final output file.
+   -c: Stop process after compilation: no linking.
+   -E: Stop process after preprocessor: no compilation, no linking.
+   -Idir: Add the directory dir to the search path of the include files.
+   -Ldir: Add the directory dir to the search path of the library files.
+   -lfile: Add the library file libfile.a in the library search path to be linked.
+   -g: Generating debugging code.  It emit very slow executive, but
+       several debugging/assertion features are enabled.  Note: if -g
+       is used for compilation, it is also needed for linking.
+   -D''symbol'': Define the ''symbol'' for the preprocessor.
+   -U''symbol'': Define the ''symbol'' for the preprocessor.
+
+In addition to above, the compiler also accepts the following non-standard options.
+
+   --safec-only: Stop process after Fail-Safe C processing.  Backend
+     native code generation is not performed.  Output file extension
+     will be ".safe.c".
+   --save-temps: Keep all intermediately generated files in the
+     current directory. Useful if you want to use debuggers.
+   -Wc,''opts'': Pass options ''opts'' to the backend native code generator (gcc).
+   -Wl,''opts'': Pass options ''opts'' to the backend native code linker.
+   -f''opts'': specify some options for compilers.
+
+
+== Tips ==
+
+  * To compile programs using GNU AUTOCONF:
+
+    Current version of the Fail-Safe C Compiler supports basic use of
+    GNU AUTOCONF.  However, due to dirty tricks used by AUTOCONF, it
+    needs special workaround.  Try invoking the configure with
+    the following options:
+
+       env CC=/path/to/fscc CFLAGS='-fgnu-autoconf-workaround' \
+         ./configure --build=i386-linux
+
+
+  * Some programs may fail accessing 4294967295th or 4294967292nd
+    offset of the memory.  This is because the programs incorrectly
+    uses address of the minus-1st element of arrays as a guardian.  It
+    can be workaround by specifying -fptr-compare-signed-offset to the
+    compiler.
+
+
+
+=== 3: Current Status ===
+
+== Limitations ==
+
+  * Static analysis is almost not implemented at all.  It imposes
+    performance penalty a lot. (bug #1)
+
+  * The compiler fails at some use of struct as a first class value.
+
+    * Elements of array inside a struct returned from functions cannot
+      be accessed (bug #3).
+
+  * Only part of standard libraries are implemented.  The list of the
+    implemented functions are on our homepage.
+
+For updated status of the bugs found in the implementation, 
+refer <https://trac.rcis.jp/FailSafeC/report/1>.
+
+== Performance ==
+
+A rough guess of the execution time for usual, real-usage programs is
+about 3 to 7 times of the original, natively-compiled programs.
+However, the number heavily depends on the type of programs, the way
+it is written, back-end compiler versions, underlying processors, and
+other environmental parameters.  Some small benchmark items give
+overhead of 6% at the lowest, but this is not likely to be achieved in
+real programs.
+
+I want to reduce the number to be around 2 in future, and I am
+planning to implement various static analysis.
+
+
+=== 4: On-line and Off-line Resources ===
+
+For more detail and up-to-date information about the program and the
+development project, please refer the following webpages:
+
+ * Fail-Safe C homepage: https://staff.aist.go.jp/y.oiwa/FailSafeC/
+ * Bug Tracking Page:    https://trac.rcis.jp/FailSafeC/
+
+
+For technical details, please refer to the following paper:
+
+   Yutaka Oiwa.
+   Implementation of the Memory-Safe Full ANSI-C Compiler.
+   In Proceedings of ACM SIGPLAN Conference on 
+   Program Language Design and Implementation (PLDI 2009).
+   June 2009.
+
+In addition, there is a thesis describing most of the system
+design (a bit out-of-date, though):
+
+   Yutaka Oiwa.
+   Implementation of a Fail-Safe ANSI C Compiler.
+   Doctoral Dissertation, Department of Computer Science,
+   Graduate School of Information Science and Technology,
+   The University of Tokyo. March 2005.
+
+Up-to-date technical manual is planned to be provided.
+
+
+=== Acknowledgements ===
+
+Development of the standard C library for the Fail-Safe C system is
+supported by "New-generation Information Security R&D Program" from
+the Ministry of Economy, Trade and Industry (METI), Japan.
+Part of library implementation is done jointly with Lepidum, Co. Ltd.
+
+Development of cross compilers, portable architectures and support for
+embedded architectures are supported under the project "Security
+technology for embedded systems", under the Programs of Special
+Coordination Funds for Promoting Science and Technology from Japan.
+
+In the University of Tokyo, this work was partially supported by
+research fellowships of the Japan Society for the Promotion of Science
+(JSPS) for Young Scientists.
+
+=== Copyright and Licenses ===
+
+     (c) 2001-2005 Yutaka OIWA.
+     (c) 2005-     Research Center for Information Security (RCIS),
+		   National Institute of
+		   Advanced Industrial Science and Technology (AIST).
+     (c) 2006      Lepidum, Co. Ltd.
+
+     All rights are reserved.			    
+
+The whole program is protected by the copyright laws in Japan and
+other nations.  The terms for use and redistributions are described
+in the LICENSE file in the distribution.
+
+[AIST program registration ID: H19PRO-719, H21PRO-1050, H21PRO-1051]

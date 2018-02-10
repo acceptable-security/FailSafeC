@@ -1,0 +1,12 @@
+/* -*- C -*- */
+
+%% C-PROLOGUE
+#include <langinfo.h>
+
+%% FSC-PROLOGUE
+#include <langinfo.h>
+
+%% REQUIRED-DECLS
+auto_generate nl_langinfo;
+
+%% NATIVE-IMPLEMENTATION

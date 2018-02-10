@@ -1,0 +1,107 @@
+prefix = @prefix@
+srcdir = @srcdir@
+builddir = @builddir@
+
+includedir = $(builddir)/include
+parserdir = $(builddir)/parser
+
+CC = @CC@
+CFLAGS = -I. @CFLAGS@
+
+INSTALL = @INSTALL@
+
+EC = $(srcdir)/../../tools/embedded-c/ec
+ECFLAGS = --cc="$(CC) $(CFLAGS)"
+
+HEADERS = _stddef.h _private_storage.h \
+	alloca.h assert.h setjmp.h \
+	ctype.h \
+	dirent.h \
+	endian.h err.h errno.h \
+	fcntl.h fcntl_internal.h float.h fnmatch.h \
+	glob.h grp.h \
+	iconv.h ifaddrs.h inttypes.h \
+	langinfo.h libgen.h limits.h locale.h \
+	malloc.h math.h memory.h \
+	netdb.h ndbm.h nl_types.h \
+	paths.h poll.h pwd.h \
+	regex.h \
+	shadow.h \
+	signal.h socket_internal.h stdarg.h stddef.h stdint.h stdio.h \
+	stdio_internal.h stdlib.h string.h strings.h stropts.h sysexits.h syslog.h \
+	termios.h time.h time_internal.h \
+	ulimit.h unistd.h utime.h utmp.h \
+	arpa/inet.h \
+	libfsc/libfsc.h \
+	net/if.h \
+	netinet/in.h netinet/in_internal.h netinet/in_systm.h netinet/ip.h netinet/tcp.h \
+	sys/bitypes.h \
+	sys/cdefs.h sys/file.h sys/ioctl.h sys/param.h sys/resource.h sys/select.h \
+	sys/socket.h sys/stat.h sys/statvfs.h sys/time.h sys/timeb.h sys/times.h \
+	sys/types.h sys/types_internal.h sys/uio.h sys/un.h sys/utsname.h \
+	sys/wait.h sys/wait_internal.h sys/mman.h \
+	sys/__types.h 
+
+RMTARGET = ($(RM) $@ ; false)
+
+DIRS = parser include include/arpa include/libfsc include/net include/netinet include/sys
+
+.PHONY: all clean dirs
+
+all: \
+	dirs \
+	$(builddir)/parser/fsc_config.ml \
+	$(addprefix $(includedir)/, $(HEADERS)) \
+
+dirs:
+	@MKDIR_P@ $(addprefix $(builddir)/, $(DIRS))
+
+$(includedir)/%.h: $(srcdir)/include/%.h.ec config.h
+	$(EC) $(ECFLAGS) -o $@ --header '/* Generated file -- do not edit. */' $<
+
+$(includedir)/%.h: $(srcdir)/include/%.h
+	(echo '/* Generated file -- do not edit. */'; cat $<) > $@ || $(RMTARGET)
+
+$(builddir)/parser/fsc_config.ml: $(srcdir)/fsc_config.ml.ec config.h
+	$(EC) $(ECFLAGS) $< > $@ || $(RMTARGET)
+
+install-arch-files: install
+	$(INSTALL) -d $(prefix)/parser
+	$(INSTALL) -m 644 parser/fsc_config.ml $(prefix)/parser/fsc_config.ml
+
+install:
+	$(INSTALL) -d $(prefix)/include
+	$(INSTALL) -d $(prefix)/include/arpa
+	$(INSTALL) -d $(prefix)/include/libfsc
+	$(INSTALL) -d $(prefix)/include/net
+	$(INSTALL) -d $(prefix)/include/netinet
+	$(INSTALL) -d $(prefix)/include/sys
+	for i in $(HEADERS) ; do \
+		$(INSTALL) -m 644 include/$$i $(prefix)/include/$$i ; \
+	done
+
+clean:
+	rm -rf $(addprefix $(builddir)/, $(DIRS))
+
+Makefile: $(srcdir)/Makefile.in config.status
+	./config.status
+config.status: $(srcdir)/configure
+	./config.status --recheck
+
+enable_reautoconf=@enable_reautoconf@
+ifneq '$(enable_reautoconf)' 'no'
+$(srcdir)/configure: $(srcdir)/configure.ac
+	cd $(srcdir) && autoconf
+endif
+
+#####
+
+$(builddir)/__types.h.ec: $(srcdir)/scripts/__types.gen.pl
+	perl $< > $@ || $(RMTARGET)
+
+$(builddir)/include/sys/__types.h: __types.h.ec config.h
+	$(EC) $(ECFLAGS) $< > $@ || $(RMTARGET)
+
+$(builddir)/include/sys/ioctl.h: $(srcdir)/../../runtime/stdlib/ioctl_list.h
+
+.INTERMEDIATE: $(builddir)/__types.h.ec

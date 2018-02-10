@@ -1,0 +1,57 @@
+/* -*- C -*- */
+
+%% C-PROLOGUE
+#include <libgen.h>
+#include <stdlib.h>
+#include <string.h>
+
+%% FSC-PROLOGUE
+#include <libgen.h>
+
+%% REQUIRED-DECLS
+require_function basename;
+require_function dirname;
+
+%% NATIVE-IMPLEMENTATION
+
+#include <wrapper/fscw_helper.h>
+
+/**
+ * @fn char *basename(char *s)
+ * @brief return file name
+ *
+ * @author Lepidum Co., Ltd.
+ */
+fscw_pointer fscw_basename(fscw_string_param(s))
+{
+  if (fscw_is_null(s)) {
+    return fscw_string_wrap(basename(0));
+  } else {
+    fscw_string_buf s_b = fscw_string_unwrap_param(s, "basename");
+    char *p = strdup(s_b.v);
+    fscw_string ret = fscw_string_wrap(basename(p));
+    free(p);
+    fscw_string_release(s_b);
+    return ret;
+  }
+}
+
+/**
+ * @fn char *dirname(char *s)
+ * @brief return directory name
+ *
+ * @author Lepidum Co., Ltd.
+ */
+fscw_pointer fscw_dirname(fscw_string_param(s))
+{
+  if (fscw_is_null(s)) {
+    return fscw_string_wrap(dirname(0));
+  } else {
+    fscw_string_buf s_b = fscw_string_unwrap_param(s, "dirname");
+    char *p = strdup(s_b.v);
+    fscw_string ret = fscw_string_wrap(dirname(p));
+    free(p);
+    fscw_string_release(s_b);
+    return ret;
+  }
+}

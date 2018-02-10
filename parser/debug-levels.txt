@@ -1,0 +1,62 @@
+--- 基本的なカテゴリ割り当て ---
+
+0: generic (reserved)
+1: compiler driver
+2: compiler main module.
+9: preprocessor.
+10: parser
+  14: location handling
+11: typing
+12: printer
+  13: location handling
+15: update_struct_types
+20: preprocess-ctt
+    20: Expunge_localstatic
+    21: Ctt_pad_structures
+    22: Ctt_reduce_mdarray
+    23: Ctt_reduce_unions
+    24: Ctt_add_tentative_initializer
+    26: Ctt_remove_unuseddecls
+25: cttm
+30: separate_side_effect [il0]
+35: postprocess-il0
+40: flatten [il1]
+50: escape-analysis [il]
+55: reduce_local_variable [il2]
+60: fat-pointer
+70: ssa
+80: analyze
+    81: ils_basetype_analysis
+90: check_conditions
+111: cttm_to_ctt
+120: ptree
+125: pp
+130: generate_stubs
+     131: new access method generator
+140: install_fsc_extension
+150: translate_to_il3
+160: il3_optimize
+165: il3_ssa_decompose
+170: il3_to_ctt
+200: linker_unify
+210: linker/generate_link_stubs
+220: linker/collect_modules
+
+--- 追加的なデバッグ要素 ---
+
+
+--- 更に一時的なデバッグ要素: 900〜 ---
+
+
+=== 基本的なレベルの考え方 ===
+
+0: 静か (デフォルト)
+1: ソース単位の進捗
+2: 関数単位の進捗表示
+3: 基本的なデバッグ出力 (2 の補完)
+4: 詳細な解析情報
+5〜: バグ潰し専用の出力
+
+基本的に、5以上は assertion バグなどを潰すのに必要な時以外は
+絶対に見ないような情報。
+

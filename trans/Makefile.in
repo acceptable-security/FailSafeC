@@ -1,0 +1,76 @@
+srcdir = @srcdir@
+builddir = @builddir@
+LN_S = @LN_S@
+
+OCAMLMAKEFILE := $(srcdir)/../OCamlMakefile
+
+# include Makefile.config
+
+OCAML_DEFAULT_FLAGS := -w y
+OCAML_DEFAULT_DIRS := ../common ../parser
+
+SOURCES := transutil.mli transutil.ml \
+	record_globalnames.mli record_globalnames.ml \
+	ils.mli \
+	ils_formatter.mli ils_formatter.ml \
+	separate_fatpointer.mli separate_fatpointer.ml \
+	ils_ssa_translate.mli ils_ssa_translate.ml \
+	ilc.mli ilc_formatter.mli ilc_formatter.ml \
+	dummy_analyzer.mli dummy_analyzer.ml \
+	ils_basetype_analysis.mli ils_basetype_analysis.ml \
+	insert_check.mli insert_check.ml \
+	il3.mli il3.ml \
+	il3_formatter.mli il3_formatter.ml \
+	il3_visitor.mli il3_visitor.ml \
+	translate_to_il3.mli translate_to_il3.ml \
+	il3_constants.mli il3_constants.ml \
+	il3_fixup.mli il3_fixup.ml \
+	il3_optimize.mli il3_optimize.ml \
+	il3_decompose_ssa.mli il3_decompose_ssa.ml \
+	il3_to_ctt.mli il3_to_ctt.ml \
+	add_support_funcs.mli add_support_funcs.ml \
+	install_fsc_extension.mli install_fsc_extension.ml \
+	trans_loadup.mli trans_loadup.ml
+
+PACKS := extlib num unix str
+LIBS := common parser
+
+RESULT := trans
+
+include $(builddir)/../Makefile.ocamlc-common
+
+PRE_TARGETS += subdirs
+
+TRANS_OPTIONS := SOURCES='trans_main.mli trans_main.ml' \
+	RESULT=trans LIBS='$(LIBS) trans' OCAMLFLAGS='$(OCAMLFLAGS)' BCSUFFIX='.bc' NCSUFFIX='.nc'
+
+all: top $(ALL_LIBRARY_TARGETS) copy_progs
+
+subdirs:
+	cd ../parser; OCAML_DEFAULT_DIRS= LIBS= $(MAKE) $(ALL_LIBRARY_TARGETS)
+
+trans.bc $(if $(OCAML_BYTECODE_ONLY),,trans.nc): $(SOURCES) trans_main.mli trans_main.ml ../parser/parser.cma
+	rm -f trans trans.bc trans_main.cmo
+	$(MAKE) $(ALL_LIBRARY_TARGETS)
+	$(MAKE) -f $(OCAMLMAKEFILE) $(TRANS_OPTIONS) $(ALL_EXECUTIVE_TARGETS)
+
+clean:: clean-subdirs clean-trans
+
+clean-subdirs:
+	cd ../parser; $(MAKE) OCAML_DEFAULT_DIRS= clean
+
+clean-trans:
+	$(MAKE) -f $(OCAMLMAKEFILE) $(TRANS_OPTIONS) clean
+
+distclean-sub:
+	rm -f Makefile ../compiler/trans.bc $(if $(OCAML_BYTECODE_ONLY),,../compiler/trans.nc)
+
+symlink:
+	if test '$(srcdir)' != '$(builddir)' ; then \
+	  for i in $(SOURCES) trans_main.mli trans_main.ml ; do \
+	    $(RM) $$i ; \
+	    $(LN_S) $(srcdir)/$$i $$i ; \
+	  done ; \
+	fi
+
+include $(OCAMLMAKEFILE)

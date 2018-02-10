@@ -1,0 +1,55 @@
+/* -*- C -*- */
+
+%% C-PROLOGUE
+#include <sys/resource.h>
+
+/* TODO: auto append this two lines */
+#define FSC_RUNTIME_LIBRARY
+#include <fsc_runtime.h>
+#include <wrapper_helper.h>
+#define FSCW_INLINE static inline
+
+#undef sa_handler
+#undef sa_sigaction
+
+%% FSC-PROLOGUE
+#include <sys/resource.h>
+
+%% REQUIRED-DECLS
+struct stdlib_rusage;
+struct stdlib_select_timeval;
+
+auto_generate getpriority;
+auto_generate setpriority;
+
+require_function getrusage;
+
+%% NATIVE-IMPLEMENTATION
+
+/**
+ * @fn int getrusage(int who, struct rusage *ru)
+ * @brief get rusage
+ *
+ * @author Lepidum Co., Ltd.
+ */
+fscw_int fscw_getrusage(fscw_int_param(who), fscw_pointer_param(dst))
+{
+  struct rusage ru;
+  int ret = getrusage(who, &ru);
+
+  if (ret == 0) {
+    fscw_struct_stdlib_rusage buf;
+    fscw_struct_stdlib_select_timeval *p;
+    
+    p = fscw_struct_stdlib_select_timeval_member(&buf, ru_utime);
+    fscw_long_wrap_write(fscw_long_member(p, tv_sec), ru.ru_utime.tv_sec);
+    fscw_long_wrap_write(fscw_long_member(p, tv_usec), ru.ru_utime.tv_usec);
+
+    p = fscw_struct_stdlib_select_timeval_member(&buf, ru_stime);
+    fscw_long_wrap_write(fscw_long_member(p, tv_sec), ru.ru_stime.tv_sec);
+    fscw_long_wrap_write(fscw_long_member(p, tv_usec), ru.ru_stime.tv_usec);
+
+    fscw_struct_stdlib_rusage_write_pointer_param(dst, 0, buf);
+  }
+  return fscw_int_wrap(ret);
+}

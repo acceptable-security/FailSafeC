@@ -1,0 +1,339 @@
+/* -*- C -*- */
+
+%% C-PROLOGUE
+#define _XOPEN_SOURCE 500
+#define _ISOC99_SOURCE
+#include <math.h>
+
+#define __fsc_fpclassifyf(x) (fpclassify(x))
+#define __fsc_fpclassifyd(x) (fpclassify(x))
+#define __fsc_fpclassifyl(x) (fpclassify(x))
+#define __fsc_isfinitef(x)   (isfinite(x))
+#define __fsc_isfinited(x)   (isfinite(x))
+#define __fsc_isfinitel(x)   (isfinite(x))
+#define __fsc_isnormalf(x)   (isnormal(x))
+#define __fsc_isnormald(x)   (isnormal(x))
+#define __fsc_isnormall(x)   (isnormal(x))
+#define __fsc_signbitf(x)    (signbit(x))
+#define __fsc_signbitd(x)    (signbit(x))
+#define __fsc_signbitl(x)    (signbit(x))
+
+%% FSC-PROLOGUE
+#include <math.h>
+
+%% REQUIRED-DECLS
+auto_generate acos;
+auto_generate acosf;
+auto_generate acosh;
+auto_generate acoshf;
+//[long double] auto_generate acoshl;
+//[long double] auto_generate acosl;
+auto_generate asin;
+auto_generate asinf;
+auto_generate asinh;
+auto_generate asinhf;
+//[long double] auto_generate asinhl;
+//[long double] auto_generate asinl;
+auto_generate atan;
+auto_generate atan2;
+auto_generate atan2f;
+//[long double] auto_generate atan2l;
+auto_generate atanf;
+auto_generate atanh;
+auto_generate atanhf;
+//[long double] auto_generate atanhl;
+//[long double] auto_generate atanl;
+auto_generate cbrt;
+auto_generate cbrtf;
+//[long double] auto_generate cbrtl;
+auto_generate ceil;
+auto_generate ceilf;
+//[long double] auto_generate ceill;
+auto_generate copysign;
+auto_generate copysignf;
+//[long double] auto_generate copysignl;
+auto_generate cos;
+auto_generate cosf;
+auto_generate cosh;
+auto_generate coshf;
+//[long double] auto_generate coshl;
+//[long double] auto_generate cosl;
+auto_generate erf;
+auto_generate erfc;
+auto_generate erfcf;
+//[long double] auto_generate erfcl;
+auto_generate erff;
+//[long double] auto_generate erfl;
+auto_generate exp;
+auto_generate exp2;
+auto_generate exp2f;
+//[long double] auto_generate exp2l;
+auto_generate expf;
+//[long double] auto_generate expl;
+auto_generate expm1;
+auto_generate expm1f;
+//[long double] auto_generate expm1l;
+auto_generate fabs;
+auto_generate fabsf;
+//[long double] auto_generate fabsl;
+auto_generate fdim;
+auto_generate fdimf;
+//[long double] auto_generate fdiml;
+auto_generate floor;
+auto_generate floorf;
+//[long double] auto_generate floorl;
+auto_generate fma;
+auto_generate fmaf;
+//[long double] auto_generate fmal;
+auto_generate fmax;
+auto_generate fmaxf;
+//[long double] auto_generate fmaxl;
+auto_generate fmin;
+auto_generate fminf;
+//[long double] auto_generate fminl;
+auto_generate fmod;
+auto_generate fmodf;
+//[long double] auto_generate fmodl;
+auto_generate hypot;
+auto_generate hypotf;
+//[long double] auto_generate hypotl;
+auto_generate ilogb;
+auto_generate ilogbf;
+//[long double] auto_generate ilogbl;
+auto_generate j0;
+auto_generate j1;
+auto_generate jn;
+auto_generate ldexp;
+auto_generate ldexpf;
+//[long double] auto_generate ldexpl;
+auto_generate llrint;
+auto_generate llrintf;
+//[long double] auto_generate llrintl;
+auto_generate llround;
+auto_generate llroundf;
+//[long double] auto_generate llroundl;
+auto_generate log;
+auto_generate log10;
+auto_generate log10f;
+//[long double] auto_generate log10l;
+auto_generate log1p;
+auto_generate log1pf;
+//[long double] auto_generate log1pl;
+auto_generate log2;
+auto_generate log2f;
+//[long double] auto_generate log2l;
+auto_generate logb;
+auto_generate logbf;
+//[long double] auto_generate logbl;
+auto_generate logf;
+//[long double] auto_generate logl;
+auto_generate lrint;
+auto_generate lrintf;
+//[long double] auto_generate lrintl;
+auto_generate lround;
+auto_generate lroundf;
+//[long double] auto_generate lroundl;
+auto_generate nan;
+auto_generate nanf;
+//[long double] auto_generate nanl;
+auto_generate nearbyint;
+auto_generate nearbyintf;
+//[long double] auto_generate nearbyintl;
+auto_generate nextafter;
+auto_generate nextafterf;
+//[long double] auto_generate nextafterl;
+//[long double] auto_generate nexttoward;
+//[long double] auto_generate nexttowardf;
+//[long double] auto_generate nexttowardl;
+auto_generate pow;
+auto_generate powf;
+//[long double] auto_generate powl;
+auto_generate remainder;
+auto_generate remainderf;
+//[long double] auto_generate remainderl;
+auto_generate rint;
+auto_generate rintf;
+//[long double] auto_generate rintl;
+auto_generate round;
+auto_generate roundf;
+//[long double] auto_generate roundl;
+auto_generate scalb;
+auto_generate scalbln;
+auto_generate scalblnf;
+//[long double] auto_generate scalblnl;
+auto_generate scalbn;
+auto_generate scalbnf;
+//[long double] auto_generate scalbnl;
+auto_generate sin;
+auto_generate sinf;
+auto_generate sinh;
+auto_generate sinhf;
+//[long double] auto_generate sinhl;
+//[long double] auto_generate sinl;
+auto_generate sqrt;
+auto_generate sqrtf;
+//[long double] auto_generate sqrtl;
+auto_generate tan;
+auto_generate tanf;
+auto_generate tanh;
+auto_generate tanhf;
+//[long double] auto_generate tanhl;
+//[long double] auto_generate tanl;
+auto_generate tgamma;
+auto_generate tgammaf;
+//[long double] auto_generate tgammal;
+auto_generate trunc;
+auto_generate truncf;
+//[long double] auto_generate truncl;
+auto_generate y0;
+auto_generate y1;
+auto_generate yn;
+
+auto_generate __fsc_fpclassifyf;
+auto_generate __fsc_fpclassifyd;
+auto_generate __fsc_fpclassifyl;
+auto_generate __fsc_isfinitef;
+auto_generate __fsc_isfinited;
+auto_generate __fsc_isfinitel;
+auto_generate __fsc_isnormalf;
+auto_generate __fsc_isnormald;
+auto_generate __fsc_isnormall;
+auto_generate __fsc_signbitf;
+auto_generate __fsc_signbitd;
+auto_generate __fsc_signbitl;
+
+require_function frexp;
+require_function frexpf;
+//[long double] require_function frexpl;
+require_function modf;
+require_function modff;
+//[long double] require_function modfl;
+require_function nan;
+require_function nanf;
+//[long double] require_function nanl;
+require_function remquo;
+require_function remquof;
+//[long double] require_function remquol;
+
+require_function lgamma;
+require_function lgammaf;
+//[long double] require_function lgammal;
+
+%% NATIVE-IMPLEMENTATION
+
+/**
+ * @fn double frexp(double num, int *exp)
+ * @brief load mantissa and exponential
+ *
+ * @author Lepidum Co., Ltd.
+ */
+fscw_double fscw_frexp(fscw_double_param(num), fscw_pointer_param(exp))
+{
+  int e;
+  fscw_double ret = fscw_double_wrap(frexp(num, &e));
+  fscw_int_write_pointer_param(exp, 0, fscw_int_wrap(e));
+  return ret;
+}
+
+/**
+ * @fn float frexpf(float num, int *exp)
+ * @brief load mantissa and exponential
+ *
+ * @author Lepidum Co., Ltd.
+ */
+fscw_float fscw_frexpf(fscw_float_param(num), fscw_pointer_param(exp))
+{
+  int e;
+  fscw_float ret = fscw_float_wrap(frexpf(num, &e));
+  fscw_int_write_pointer_param(exp, 0, fscw_int_wrap(e));
+  return ret;
+}
+
+
+/**
+ * @fn double modf(double x, double *r)
+ * @brief load integer and fractional part of floating point
+ *
+ * @author Lepidum Co., Ltd.
+ */
+fscw_double fscw_modf(fscw_double_param(x), fscw_pointer_param(r))
+{
+  double y;
+  fscw_double ret = fscw_double_wrap(modf(x, &y));
+  fscw_double_write_pointer_param(r, 0, fscw_double_wrap(y));
+  return ret;
+}
+
+/**
+ * @fn float modff(float x, float *r)
+ * @brief load integer and fractional part of floating point
+ *
+ * @author Lepidum Co., Ltd.
+ */
+fscw_float fscw_modff(fscw_float_param(x), fscw_pointer_param(r))
+{
+  float y;
+  fscw_float ret = fscw_float_wrap(modff(x, &y));
+  fscw_float_write_pointer_param(r, 0, fscw_float_wrap(y));
+  return ret;
+}
+
+/**
+ * @fn double remquo(double x, double y, int *q)
+ * @brief calculate remainder
+ *
+ * @author Lepidum Co., Ltd.
+ */
+fscw_double fscw_remquo(fscw_double_param(x), fscw_double_param(y), fscw_pointer_param(q))
+{
+  int quo = fscw_int_unwrap(fscw_int_read_pointer_param(q, 0));
+  fscw_double ret = fscw_double_wrap(remquo(x, y, &quo));
+  fscw_int_write_pointer_param(q, 0, fscw_int_wrap(quo));
+  return ret;}
+
+
+/**
+ * @fn float remquof(float x, float y, int *q)
+ * @brief calculate remainder
+ *
+ * @author Lepidum Co., Ltd.
+ */
+fscw_float fscw_remquof(fscw_float_param(x), fscw_float_param(y), fscw_pointer_param(q))
+{
+  int quo = fscw_int_unwrap(fscw_int_read_pointer_param(q, 0));
+  fscw_float ret = fscw_float_wrap(remquo(x, y, &quo));
+  fscw_int_write_pointer_param(q, 0, fscw_int_wrap(quo));
+  return ret;
+}
+
+extern struct fsc_storage_i_s
+{
+  struct fsc_header fsc_header;
+  union fsc_initU_i val;
+} GV_i_signgam;
+
+/**
+ * @fn double lgamma(double x)
+ * @brief calculate ln(gamma(x))
+ *
+ * @author Lepidum Co., Ltd.
+ */
+fscw_double fscw_lgamma(fscw_double_param(x))
+{
+  double v = lgamma(x);
+  GV_i_signgam.val.cv = signgam;
+  return fscw_double_wrap(v);
+}
+
+/**
+ * @fn float lgammaf(float x)
+ * @brief calculate ln(gamma(x))
+ *
+ * @author Lepidum Co., Ltd.
+ */
+fscw_float fscw_lgammaf(fscw_float_param(x))
+{
+  float v = lgammaf(x);
+  GV_i_signgam.val.cv = signgam;
+  return fscw_float_wrap(v);
+}

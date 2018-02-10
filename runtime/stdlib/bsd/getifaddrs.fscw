@@ -1,0 +1,162 @@
+/* 
+   Part of Fail-Safe C Runtime. Produced by Yutaka Oiwa.
+   (c) 2001-2005 Yutaka Oiwa.
+   (c) 2005-2006 AIST.
+   (c) 2006	 Lepidum Co. Ltd.
+
+   This file is written by Lepidum Co. Ltd. in 2006.
+
+   This file is distributed under Apache License 2.0 with a special exception.
+   See the file LICENSE contained in the distribution.
+*/
+/**
+ * @file stdlib/bsd/getifaddrs.c
+ */
+
+%% C-PROLOGUE
+
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <ifaddrs.h>
+#undef ifa_dstaddr
+
+%% FSC-PROLOGUE
+
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <ifaddrs.h>
+
+%% REQUIRED-DECLS
+
+require_function getifaddrs;
+require_function freeifaddrs;
+
+%% NATIVE-IMPLEMENTATION
+
+#include <copydata.h>
+
+typedef struct  struct_Sn14stdlib_ifaddrs_ fsc_ifaddrs;
+
+static int addr_supported(struct sockaddr *addr)
+{
+  if (addr == NULL) {
+    return 1;
+  }
+  if (addr->sa_family == AF_INET ||
+      addr->sa_family == AF_INET6) {
+    return 1;
+  }
+  return 0;
+}
+
+static int ifa_supported(struct ifaddrs *p)
+{
+  if (addr_supported(p->ifa_addr) &&
+      addr_supported(p->ifa_netmask) &&
+      addr_supported(p->ifa_ifu.ifu_dstaddr))
+    return 1;
+  else
+    return 0;
+}
+
+static ptrvalue copy_sockaddr(struct sockaddr *addr)
+{
+  int sz = 0;
+  base_t p;
+  
+  if (addr == NULL) return ptrvalue_of_base_ofs(0, 0);
+  
+  switch (addr->sa_family) {
+  case AF_INET:
+    sz = sizeof (struct sockaddr_in);
+    break;
+  case AF_INET6:
+    sz = sizeof (struct sockaddr_in6);
+    break;
+  default:
+    sz = sizeof (struct { sa_family_t sa_family; } );
+    break;
+  }
+  p = fsc_alloc_static_block(&fsc_typeinfo_c.val, sz);
+  fsc_copy_from_raw(p, 0, addr, sz);
+  return ptrvalue_of_base_ofs(p, 0);
+}
+
+static ptrvalue copy_ifaddrs(struct ifaddrs *ifa)
+{
+  struct ifaddrs *p = ifa;
+  int n_ifa;
+  int i;
+  fsc_ifaddrs *res_ifa;
+
+  for (n_ifa = 0; p;) {
+    if (ifa_supported(p))
+      n_ifa++;
+    p = p->ifa_next;
+  }
+  res_ifa = (fsc_ifaddrs *)fsc_alloc_static_block(&fsc_typeinfo_Sn14stdlib_ifaddrs_.val, n_ifa);
+
+  p = ifa;
+  for (i = 0; i < n_ifa; i++) {
+    while (!ifa_supported(p)) p = p->ifa_next;
+    if (i < n_ifa - 1)
+	res_ifa[i].fld_ifa_next.cv = 
+	    ptrvalue_of_base_ofs((base_t)res_ifa, (i + 1) * sizeof (struct ifaddrs));
+    else     
+	res_ifa[i].fld_ifa_next.cv = ptrvalue_of_base_ofs(0, 0);
+    res_ifa[i].fld_ifa_name.cv     = wrapper_make_new_static_string(p->ifa_name);
+    res_ifa[i].fld_ifa_flags.cv    = value_of_int(p->ifa_flags);
+    res_ifa[i].fld_ifa_addr.cv     = copy_sockaddr(p->ifa_addr);
+    res_ifa[i].fld_ifa_netmask.cv  = copy_sockaddr(p->ifa_netmask);
+    res_ifa[i].fld_ifa_dstaddr.cv  = copy_sockaddr(p->ifa_ifu.ifu_dstaddr);
+    res_ifa[i].fld_ifa_data.cv     = ptrvalue_of_base_ofs(0, 0);
+    p = p->ifa_next;
+  }
+  return ptrvalue_of_base_ofs((base_t)res_ifa, 0);
+}
+
+/**
+ * @fn int getifaddrs(struct ifaddrs **p)
+ * @brief get network interface list.
+ * @param p interface list returned.
+ * @retval 0 success.
+ * @retval -1 failed.
+ *
+ * @crashcase illegal pointer
+ * @fsctype struct(pointer)
+ *
+ * @author Lepidum Co., Ltd.
+ */
+value FS_FPPSn14stdlib_ifaddrs__i_getifaddrs(base_t ifa_b, ofs_t ifa_o)
+{
+  struct ifaddrs *ifa;
+  
+  int ret = getifaddrs(&ifa);
+  if (ret != 0) {
+    return value_of_int(-1);
+  } else {
+    ptrvalue res_ifa = copy_ifaddrs(ifa);
+    freeifaddrs(ifa);
+    write_word(ifa_b, ifa_o, value_of_ptrvalue(res_ifa), NULL);
+    return value_of_int(0);
+  }
+}
+
+
+/**
+ * @fn void *freeifaddrs(struct ifaddrs *)
+ * @brief free ifaddrs structure
+ * @param a structure to free
+ *
+ * @todo implementation
+ *
+ * @crashcase illegal pointer
+ * @fsctype struct(pointer)
+ *
+ * @author Lepidum Co., Ltd.
+ */
+void FS_FPSn14stdlib_ifaddrs__v_freeifaddrs(base_t ifa_b, ofs_t ifa_o)
+{
+  return;
+}

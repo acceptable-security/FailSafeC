@@ -1,0 +1,210 @@
+/* -*- C -*- */
+
+%% C-PROLOGUE
+#define _XOPEN_SOURCE 600
+#include <stdio.h>
+#include <string.h>
+#include <errno.h>
+
+%% FSC-PROLOGUE
+#include <stdio.h>
+
+%% REQUIRED-DECLS
+
+require_function ctermid;
+require_function freopen;
+require_function rewind;
+require_function setbuf;
+require_function tmpfile;
+require_function tmpnam;
+require_function tempnam; // TODO; auto_generate needs new attribute [free-able string]
+
+require_function fseeko;
+require_function ftello;
+
+%% NATIVE-IMPLEMENTATION
+
+#include <copydata.h>
+#include <wrapper/fscw_helper.h>
+#include <stdlib/env_helper.h>
+
+/**
+ * @fn char *ctermid(char *s)
+ * @brief generate terminal path
+ *
+ * @author Lepidum Co., Ltd.
+ */
+fscw_pointer fscw_ctermid(fscw_string_param(s))
+{
+  if (fscw_is_null(s)) {
+    return fscw_string_wrap(ctermid(NULL));
+  } else {
+    char buf[L_ctermid];
+    ctermid(buf);
+    fsc_copy_from_raw(s_base, s_ofs, buf, L_ctermid);
+    return ptrvalue_of_base_ofs(s_base, s_ofs);
+  }
+}
+
+/**
+ * @fn char *tmpnam(char *s)
+ * @brief generate temporary path
+ *
+ * @author Lepidum Co., Ltd.
+ */
+fscw_pointer fscw_tmpnam(fscw_string_param(s))
+{
+  if (fscw_is_null(s)) {
+    return fscw_string_wrap(tmpnam(NULL));
+  } else {
+    char buf[L_tmpnam];
+    tmpnam(buf);
+    fsc_copy_from_raw(s_base, s_ofs, buf, L_tmpnam);
+    return ptrvalue_of_base_ofs(s_base, s_ofs);
+  }
+}
+
+#include "../fileptr.h"
+
+/**
+ * @fn FILE *freopen(const char *filename, const char *mode, FILE *fp)
+ * @brief open file
+ *
+ * @author Lepidum Co., Ltd.
+ */
+fscw_pointer fscw_freopen(fscw_string_param(filename), 
+                          fscw_string_param(mode), 
+                          fscw_pointer_param(fp))
+{
+  FILE *f = get_FILE_pointer(fp_base, fp_ofs);
+  FILE *ret;
+  fscw_string_buf fn = {0 , 0};
+  fscw_string_buf md = fscw_string_unwrap_param(mode, "freopen");
+  if (!fscw_is_null(filename)) {
+    fn = fscw_string_unwrap_param(filename, "freopen");
+  }
+  ret = freopen(fn.v, md.v, f);
+  if (!fscw_is_null(filename)) {
+    fscw_string_release(fn);
+  }
+  fscw_string_release(md);
+  if (ret) {
+    return ptrvalue_of_base_ofs(fp_base, fp_ofs);
+  } else {
+    return fscw_pointer_wrap(NULL);
+  }
+}
+
+/**
+ * @fn void rewind(FILE *fp)
+ * @brief rewind stream
+ *
+ * @author Lepidum Co., Ltd.
+ */
+extern void fscw_rewind(fscw_pointer_param(fp))
+{
+  FILE *f = get_FILE_pointer(fp_base, fp_ofs);
+  rewind(f);
+}
+
+/**
+ * @fn void setbuf(FILE *fp, char *buf)
+ * @brief set buffer of stream
+ *
+ * @author Lepidum Co., Ltd.
+ */
+extern void fscw_setbuf(fscw_pointer_param(fp), 
+                        fscw_string_param(buf))
+{
+  FILE *f = get_FILE_pointer(fp_base, fp_ofs);
+  if (fscw_is_null(buf)) {
+    setbuf(f, NULL);
+  } else {
+    /* ignore */
+  }
+}
+
+/**
+ * @fn FILE *tmpfile(void)
+ * @brief open temporary file
+ *
+ * @author Lepidum Co., Ltd.
+ */
+fscw_pointer fscw_tmpfile(void)
+{
+  FILE *fp = tmpfile();
+  if (fp) {
+    base_t p = fsc_alloc_static_block(&fsc_typeinfo_Sn10stdio_FILE_.val, 1);
+    *(FILE **)p = fp;
+    return ptrvalue_of_base_ofs(p, 0);
+  } else {
+    return fscw_pointer_wrap(NULL);
+  }
+}
+
+/**
+ * @fn char *tempnam(const char *dir, const char *prefix)
+ * @brief generate temporary path
+ *
+ * @author Lepidum Co., Ltd.
+ */
+fscw_pointer fscw_tempnam(fscw_string_param(dir), 
+                          fscw_string_param(prefix))
+{
+  fscw_string_buf d = {0, 0};
+  fscw_string_buf p = {0, 0};
+  char *r;
+  if (!fscw_is_null(dir))    d = fscw_string_unwrap_param(dir, "tempnam");
+  if (!fscw_is_null(prefix)) p = fscw_string_unwrap_param(prefix, "tempnam");
+
+  fsc_set_system_env("TMPDIR");
+  r = tempnam(d.v, p.v);
+  if (!fscw_is_null(dir)) fscw_string_release(d);
+  if (!fscw_is_null(prefix)) fscw_string_release(p);
+  if (r) {
+    int len = strlen(r);
+    char *ret = (char *)fsc_alloc_block_full(&fsc_typeinfo_c.val, len + 1, 0, RFLAG_TYPE_NORMAL);
+    strcpy(ret, r);
+    free(r);
+    return fscw_pointer_wrap(ret);
+  } else {
+    return fscw_pointer_wrap(NULL);
+  }
+}
+
+
+/**
+ * @fn int fseeko(FILE *fp, off_t offset, int whence)
+ * @brief seek file pointer
+ *
+ * @author Lepidum Co., Ltd.
+ */
+fscw_int fscw_fseeko(fscw_pointer_param(fp),
+                     fscw_off_t_param(offset),
+                     fscw_int_param(whence))
+{
+  FILE *fp;
+  int r;
+
+  fp = get_FILE_pointer(fp_base, fp_ofs);
+  r = fseeko(fp, offset, whence);
+
+  return fscw_int_wrap(r);
+}
+
+/**
+ * @fn off_t ftello(FILE *fp)
+ * @brief get current file offset
+ *
+ * @author Lepidum Co., Ltd.
+ */
+fscw_off_t fscw_ftello(fscw_pointer_param(fp))
+{
+  FILE *fp;
+  off_t r;
+
+  fp = get_FILE_pointer(fp_base, fp_ofs);
+  r = ftello(fp);
+
+  return fscw_off_t_wrap(r);
+}

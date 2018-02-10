@@ -1,0 +1,45 @@
+# Part of Fail-Safe C Compiler. (c) 2002-2004 Yutaka Oiwa.
+# common/Makefile
+
+srcdir = @srcdir@
+builddir = @builddir@
+LN_S = @LN_S@
+
+CC = gcc -fPIC -D_REENTRANT
+#CC = ccache gcc -fPIC -D_REENTRANT
+
+OCAMLMAKEFILE := $(srcdir)/../OCamlMakefile
+
+OCAML_DEFAULT_FLAGS :=
+OCAML_DEFAULT_DIRS :=
+include $(builddir)/../Makefile.ocamlc-common
+
+SOURCES = \
+	option.mli option.ml \
+	util.mli util.ml \
+	debug.mli debug.ml \
+	glist.mli glist.ml \
+	big_int_infix.mli big_int_infix.ml \
+	set_list.mli set_list.ml \
+	int_set.mli int_set.ml \
+	topological_sort.mli topological_sort.ml
+
+PACKS = extlib num unix
+
+RESULT := common
+
+all: top $(ALL_LIBRARY_TARGETS)
+opt: all ncl
+
+symlink:
+	if test '$(srcdir)' != '$(builddir)' ; then \
+	  for i in $(SOURCES) ; do \
+	    $(RM) $$i ; \
+	    $(LN_S) $(srcdir)/$$i $$i ; \
+	  done ; \
+	fi
+
+distclean-sub:
+	rm -f Makefile
+
+include $(OCAMLMAKEFILE)
